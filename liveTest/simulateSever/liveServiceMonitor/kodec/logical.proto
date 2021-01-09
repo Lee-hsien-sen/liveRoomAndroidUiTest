@@ -1,0 +1,3590 @@
+syntax = "proto3";
+option java_multiple_files = true;
+package kodec;
+import "kodec/msg_type.proto";
+
+enum JoinType {
+    NORMAL_JOIN = 0; //正常加入
+    KICKOUT_JOIN = 1; //同一帐号登录两次，后登入的踢掉前一个用户
+}
+
+message ClientInfo {
+    string os_name = 1; //可选值 android iphone ipad windows mac
+    string os_version = 2; // 操作系统版本号，安卓填写安卓操作系统版本号，苹果填写ios版本号, windows填写 xp 7 8 8.1 10 , mac 填写类似于10.13.4这种格式
+    string client_version = 3; // 客户端版本号
+    string browser_name = 4; // 浏览器名称
+    string browser_version = 5; // 浏览器版本号
+    string brand_name = 6; // 填写设备型号，比如`小米 `note3`，`iphone 7plus`
+    string browser_ua = 7; // 浏览器 ua
+}
+
+message CommunicationFrame {
+    MsgType msg_type = 1; //{Number} 消息类型
+    string msg_no = 2; //{String} 消息编号
+    string msg_from_user_id = 3; //{String} 消息发送者用户ID
+    string msg_to_user_id = 4; //{String} 要发送到的用户ID，可以为空
+    uint32 device_type = 5; // {Number} 设备类型
+    uint32 version = 6; // {Number} 版本号
+    uint64 timestamp = 7; //{Number} 请求时间戳，由msn（消息服务器）赋值
+    JoinType join_type = 8; //{Number} 废弃
+    uint32 ip = 9; // //{Number} 将 ip 地址转换为数字类型
+    ClientInfo client_info = 10; // 客户端系统和版本信息
+    map<string,string> extended_fields = 11;//扩展字段,其中包含 from 字段，标记用户进入直播间的来源 hand_device_user_id 字段，标识手持设备用户id
+}
+message Result {
+    uint32 code = 1;
+    string msg = 2;
+}
+message RequestPackage { //客户端请求数据包
+                         CommunicationFrame head_frame = 1;
+                         bytes logical_frame = 2;
+}
+
+message ResponsePackage { //客户端响应数据包
+                          CommunicationFrame head_frame = 1;
+                          Result result_frame = 2;
+                          ResponseMessage logical_frame = 3;
+}
+
+message Kickout {
+    uint32 max_online = 1;
+    repeated string user_ids = 2;
+}
+
+message User {
+    string user_id = 1;
+    string nickname = 2;
+    string avatar_url = 3;
+    uint32 user_type = 4;
+    string live_id = 5;
+    string app_id = 6;
+    repeated uint32 groups = 7;
+    string token = 8;
+    Kickout kickout = 9;
+    uint32 device_type = 10;
+    uint32 room_index = 11;
+    uint32 ip = 12;
+    string login_id = 13; //供给msn使用
+    uint32 leave_time = 14;
+    uint32 leave_count = 15;
+    string remark = 16;
+}
+
+enum ToType {
+    RESPONSE = 0;
+    BROADCAST = 1;
+    P2P = 2;
+}
+message ToMessage {
+    ToType to_type = 1; // {Number} 0 请求响应 1 广播 2 点对点通知
+    bool need_send = 2; //{Boolean} 是否需要发送
+    bytes package = 3; //:{bytes} 要发送的数据包,
+    repeated uint32 to_groups = 4; // {Array[Number]} 要广播的分组 ,
+    string to_user_id = 5; //{String} 要发送的点对点用户ID,
+    uint32 level = 6; // {Number} 消息等级,默认0，表示最高
+    uint32 max_age = 7; // {Number} 消息最大允许存活时间，单位秒，默认0
+}
+
+message LogicalResponse { //HTTP响应数据包结构
+                          uint32 code = 1; //返回码，0表示成功
+                          User user = 2; //用户数据，仅仅在join_room时返回
+                          repeated ToMessage messages = 3;
+}
+
+service Logical {
+    // Sends a greeting
+    rpc DoRequest (RequestPackage) returns (LogicalResponse) {
+    }
+}
+
+enum LiveStatus {
+    LIVE_STATUS_NOT_START = 0;
+    LIVE_STATUS_START = 1;
+    LIVE_STATUS_ONLINE = 2;
+    LIVE_STATUS_PAUSED = 3;
+    LIVE_STATUS_STOP = 4;
+}
+
+enum PptBoardStatus {
+    PPT_BOARD_STATUS_OTHER = 0;
+    PPT_BOARD_STATUS_PPT = 1;
+    PPT_BOARD_STATUS_BOARD = 2;
+}
+
+enum StreamStatus {
+    DISCONNECTED = 0;
+    PUBLISHED = 1;
+}
+
+enum HandsUpOperationType {
+    HANDS_DOWN = 0; //
+    HANDS_UP = 1; //
+}
+
+enum PptType {
+    PPT_CLASSICAL = 0;
+    PPT_COURSEWARE = 1;
+}
+
+message Point {
+    int32 x = 1;
+    int32 y = 2;
+    float width = 3;
+    uint64 time = 4;
+}
+
+message Pencil {
+    message TextPencil {
+        bytes font = 1;
+        string content = 2;
+        repeated Point points = 3;
+    }
+    message ShapePencil {
+        uint32 line_width = 1;
+        repeated Point points = 2;
+        bool is_use_tablet = 3;
+    }
+    uint32 page_num = 1;
+    string ppt_id = 2;
+    uint32 type = 3;
+    bytes color = 4;
+    uint32 width = 5;
+    uint32 height = 6;
+    oneof pencil_of_one {
+        TextPencil text_pencil = 7;
+        ShapePencil shape_pencil = 8;
+    }
+    uint32 pencil_id = 9;
+    bool is_revoked = 10;
+    int32 inner_index = 11;
+    bool is_fluorescence_used = 12;
+}
+
+message BoardPencil {
+    message TextPencil {
+        bytes font = 1;
+        string content = 2;
+        repeated Point points = 3;
+    }
+    message ShapePencil {
+        uint32 line_width = 1;
+        repeated Point points = 2;
+        bool is_use_tablet = 3;
+    }
+    uint32 board_id = 1;
+    uint32 type = 2;
+    bytes color = 3;
+    uint32 width = 4;
+    uint32 height = 5;
+    oneof pencil_of_one {
+        TextPencil text_pencil = 6;
+        ShapePencil shape_pencil = 7;
+    }
+    uint32 pencil_id = 8;
+    bool is_revoked = 9;
+    bool is_fluorescence_used = 10;
+}
+
+message StreamStatusChange {
+    StreamStatus status = 1;
+    string stream_id = 2;
+}
+
+message Ppt {
+    string ppt_id = 1;
+    string ppt_name = 2;
+    uint32 page_num = 3;
+    uint32 original_height = 4;
+    uint32 original_width = 5;
+    string zip_url = 6;
+}
+
+message Chat { //聊天
+               uint32 chat_id = 1;
+               string content = 2;
+               uint32 to = 3; //发送到哪个分组
+
+               string user_id = 4;
+               string nickname = 5;
+               string avatar_url = 6;
+               uint32 user_type = 7;
+               uint32 device_type = 8;
+               uint32 ip = 9; //服务器端返回
+               string adornment_url = 10;
+               bool is_mvp = 11; // 发言者是否 mvp
+               uint32 continue_right_num = 12; // 发言者的连对次数
+}
+
+message ChangeLiveStatus { //更改直播状态
+                           LiveStatus status = 2;
+                           VideoSourceType video_source_type = 3;
+}
+
+message ForbidChat { //禁言
+                     uint32 operation = 1;
+                     string user_id = 2;
+                     string nickname = 3;
+                     string avatar_url = 4; //禁言请求不需要传递此参数
+                     uint32 timeout = 5; //禁言时长，单位为ms
+                     uint64 expired = 6; //禁言失效时间戳
+}
+
+message ChangePptPage {
+    string ppt_id = 1;
+    uint32 page_num = 2;
+    uint32 page_step = 3;
+    uint32 max_pencil_id = 4;
+    string ppt_name = 5;
+    uint32 original_height = 6;
+    uint32 original_width = 7;
+    uint32 page_count = 8; //总页码
+    string dom_selector = 9;//点击的DOM元素的筛选器
+    int32 inner_index = 10;
+    PptType ppt_type = 11;
+}
+
+message ChangeBoard {
+    uint32 board_id = 1;
+    uint32 height = 2;
+    uint32 width = 3;
+    uint32 max_pencil_id = 4;
+}
+
+enum LeaveReason {
+    DEFAULT_REASON = 0; //正常下线
+    UNEXCEPTION_REASON = 1; //心跳异常情况掉线
+    KICK_OUT_REASON = 2; //同帐号登录的踢人操作
+    READ_ERROR_REASON = 3; //读错误
+    WRITE_ERROR_REASON = 4; //写错误
+    TEACHER_KICK_REASON = 10; //老师互踢
+}
+
+message ChatControl {
+    uint32 operation = 1;
+}
+
+message Contest {
+    uint32 wait_time = 1; // 单位秒
+    string question_id = 2;
+}
+
+message CountDown {
+    uint32 wait_time = 1; // 单位秒
+    string time_id = 2;
+}
+
+message VoteOption {
+    string option_name = 1;
+    string description = 2;
+    bool is_right = 3;
+}
+
+message StageDown {
+    string window_id = 1;
+    string user_id = 2;
+}
+
+message WindowMove {
+    string window_id = 1;
+    repeated Point points = 2;
+}
+
+message RewardIndividual {
+    string to_user_id = 1;
+    string teacher_id = 2;
+    string to_user_nickname = 3;
+    string avatar_url = 4;
+    uint32 count = 5;
+    string teacher_nickname = 6;
+}
+
+message RewardEveryone {
+    uint32 max_reward = 1;
+    uint32 min_reward = 2;
+    string teacher_id = 3;
+    uint32 group_id = 4;
+    string reward_id = 5;
+}
+
+message StageP2P {
+    string window_id = 1;
+    Point point = 2;
+    uint32 width = 3;
+    uint32 height = 4;
+    string teacher_id = 5;
+}
+
+message Privilege {
+    string user_id = 1;
+    uint32 type = 2;
+}
+
+message PrivilegeP2P {
+    uint32 type = 1;
+}
+
+message LiveInfo {
+    message Stream {
+        string teacher_pass = 1;
+        string student_pass = 2;
+        string assistant_pass = 3;
+        string patrol_pass = 4;
+    }
+    message Config {
+        uint32 provider = 1;
+        string third_id = 2;
+        Stream stream = 3;
+    }
+    string course_name = 1;
+    uint64 begin_time = 2;
+    uint64 end_time = 3;
+    uint32 live_seq = 4;
+    uint32 type = 5;
+    Config config = 6;
+    bool is_activity = 7;
+    float user_ratio = 8;
+    uint32 subject_type = 9; // 0其它 1 英语 2 数学 3 语文 4 物理 5 化学 6 生物 7 编程
+    uint32 group_num = 10; 
+    uint32 student_num = 11;
+    uint32 grade = 12;       //53:大班,1:一年级,2:二年级,3:三年级,4:四年级,5:五年级,6:六年级,7:初一,8:初二,9:初三,11:高一,12:高二,13:高三
+    bool is_pet_enabled = 13; // 是否使用宠物
+    uint32 school_type = 14; //0 其它 1 公立院校
+}
+
+message ChangeVideoList {
+    repeated string window_list = 1;
+}
+message StageSimple {
+    string window_id = 1; //上下台需要参数
+    Point point = 2; //上台可选参数,移动窗口时必传，标识当前窗口被移动到的位置
+    uint32 width = 3; //上台可选参数
+    uint32 height = 4; //上台可选参数
+}
+message StageUp1v6 { //改消息定义废弃
+                     string window_id = 1;
+                     Point point = 2;
+                     uint32 width = 3;
+                     uint32 height = 4;
+}
+
+message RewardRankShow {
+
+}
+
+message HandsUp {
+    HandsUpOperationType operation = 1;
+}
+
+message RtcHandsUp {
+    HandsUpOperationType operation = 1;
+}
+
+
+enum MicOperationType {
+    MIC_ENABLE = 0; //
+    MIC_FORBID = 1; //
+}
+
+enum VideoOperationType {
+    VIDEO_ENABLE = 0; //
+    VIDEO_FORBID = 1; //
+}
+
+message ForbidMic {
+    MicOperationType operation = 1;
+    string user_id = 2;
+    string nickname = 3;
+    uint32 channel_user_id = 4;
+}
+
+message ForbidRtcMic {
+    MicOperationType operation = 1;
+    string user_id = 2;
+    string nickname = 3;
+    uint32 channel_user_id = 4;
+}
+
+message ForbidRtcVideo {
+    VideoOperationType operation = 1;
+    string user_id = 2;
+    string nickname = 3;
+    uint32 channel_user_id = 4;
+}
+
+message ForbidMicAll {
+    MicOperationType operation = 1;
+}
+
+enum MediaStatusType {
+    MEDIA_NOT_START = 0;
+    MEDIA_START = 1;
+    MEDIA_PAUSE = 2;
+    MEDIA_CONTINUE = 3;
+    MEDIA_SEEK = 4;
+    MEDIA_STOP = 5;
+}
+
+enum MediaType {
+    MEDIA_OTHER = 0;
+    MEDIA_VIDEO = 1;
+    MEDIA_AUDIO = 2;
+}
+
+
+message ChangeMediaStatus { //@deprecated
+                            MediaStatusType status = 1;
+                            MediaType type = 2;
+                            string src_url = 3;
+                            float play_time = 4;
+                            string media_name = 5; //媒体名称
+                            string media_id = 6;
+                            uint64 created_time = 7; //服务器端返回
+}
+
+message MediaStatus {
+    MediaStatusType status = 1;
+    MediaType type = 2;
+    string src_url = 3;
+    float play_time = 4;
+    string media_name = 5; //媒体名称
+    string media_id = 6;
+    uint64 created_time = 7; //服务器端返回
+}
+
+enum MediaLocationType {
+    MEDIA_LOCATION_UNKNOWN = 0;
+    MEDIA_LOCATION_MOVE = 1;
+    MEDIA_LOCATION_MINIMUM = 2;
+    MEDIA_LOCATION_RESUME = 3;
+    MEDIA_LOCATION_CLOSE = 4;
+    MEDIA_LOCATION_ENTER_FULLSCREEN = 5;
+    MEDIA_LOCATION_EXIT_FULLSCREEN = 6;
+    MEDIA_LOCATION_RESIZE = 7;
+}
+message MediaLocation {
+    MediaLocationType location_type = 1;
+    Point point = 2;
+    uint32 width = 3;
+    uint32 height = 4;
+    MediaType media_type = 5;
+    string media_id = 6;
+    uint64 created_time = 7; //服务器端返回
+}
+
+message VideoInfo {
+    string video_id = 1;
+    string video_name = 2;
+    string video_src_high = 3; //高分辨率播放地址，完整访问地址${play_base_url} + ${video_src_high}
+    string video_src_low = 4; //低分辨率播放地址，完成访问地址${play_base_url} + ${video_src_high}
+    string img_relative_path = 5;
+    uint32 thumb_num = 6; //缩略图相对地址。单个缩微图完整访问地址：${thumbnail_base_url} + ${img_relative_path} + "_" + ${n} + ".jpg"， n取值从1到${thumb_num};
+}
+message AudioInfo {
+    string audio_id = 1;
+    string audio_name = 2;
+    string audio_src = 3; //完整访问地址${play_base_url} + ${audio_src}
+}
+
+message StreamItem {
+    string name = 1; //提供商名称
+    string hls_play_url = 2; //m3u8播放地址
+    string rtmp_play_url = 3; //rtmp播放地址
+    string line_type = 4;//线路类型,为了兼容老版本里面 `line_type` 可能会有重复的，客户端需要自己去重
+    bool is_auto_switch_enabled = 5;//是否允许自动切换
+    bool is_http_dns_enabled = 6;//是否允许使用http dns
+    string line_id = 7;//线路唯一标识
+}
+
+enum ChannelName {
+    EASY_ANSWER_VOTE = 0;
+    MEDIUM_ANSWER_VOTE = 1;
+    HARD_ANSWER_VOTE = 2;
+    DOUBLE_TEACHER_EASY_ANSWER_VOTE = 3;
+    DOUBLE_TEACHER_MEDIUM_ANSWER_VOTE = 4;
+    DOUBLE_TEACHER_HARD_ANSWER_VOTE = 5;
+}
+
+message VoteRewardType {    
+    ChannelName currency_channel_name = 1;
+    uint32 quantity = 2; // 这个渠道下奖励值
+}
+
+message LiveConfig {
+    repeated StreamItem stream_items = 1;
+    string cdn_upload_file_host = 2;
+    bool is_assistant_stage_enabled = 3;
+    string examination_teacher_web = 4;
+    string examination_asistant_web = 5;
+    string examination_student_web = 6;
+    string reactive_frames_url = 7;
+    string reactive_host = 8;
+    uint32 teacher_portrait_width = 9;
+    uint32 teacher_portrait_height = 10;
+    uint32 teacher_screen_width = 11;
+    uint32 teacher_screen_height = 12;
+    string base_url_after_live = 13;
+    GetSmallClassAliVoiceTokenRes speech_to_text_token = 14;
+    repeated VoteRewardType vote_reward = 15;   // 该 live 答题器可使用的难度配置
+    uint32 reward_rank_list_duration = 16; // 抢海星榜单持续时间
+    uint32 vote_rank_list_duration = 17; // 答题器榜单持续秒数
+    uint32 small_class_upload_img_cycle_ms = 18; //鉴黄上传图片周期，如果为0，则停止上传图片，单位ms
+    string logical_short_base_url = 19;
+}
+enum MediaChangeType {
+    MEDIA_CHANGE_UNKNOWN = 0;
+    MEDIA_CHANGE_STATUS = 1;
+    MEDIA_CHANGE_LOCATION = 2;
+}
+
+message MediaStatusAndLocation {
+    string current_media_id = 1;
+    bool isNoneMediaExists = 2;
+    MediaStatus media_status = 3;
+    MediaLocation media_location = 4;
+    uint64 date = 5;
+}
+
+
+message Notice {
+    string notice_content = 1;
+    string notice_link = 2;
+}
+
+message NoticeDelete {
+}
+
+message VoiceRead {
+    string question_id = 1; //响应参数 题目ID，由服务器端生成
+    string sample_text = 2; //请求参数 题目正确文本，由老师端指定
+    bool belong_continue_right = 3;
+    bool is_local_score_enabled = 4;  //是否启用本地打分引擎
+    string graph_addr = 5;              //声音图谱oss地址
+}
+
+message VoiceReadReport {
+    string question_id = 1; //请求参数
+    uint32 code = 2; //请求参数 调用打分服务错误码
+    string message = 3; //请求参数 调用打分服务错误信息
+    uint32 original_score = 4; //请求参数 调用打分服务返回的分数
+    string voice_url = 5; //请求参数 调用打分服务返回的播放地址
+    uint32 level = 6; //响应参数 服务器返回的级别，目前为1-5
+    uint32 score = 7; //响应参数 服务器端返回的海星数
+    uint64 voice_duration = 8; // 录音时长 毫秒
+    bool is_local_score_enabled = 9; //废弃
+    uint32 pet_reward_count = 10; // 宠物海星奖励
+    uint32 voice_score_type = 11; // 语音打分类型 0 其它 1 本地打分 2 线上打分
+}
+
+message RewardDetail {
+    uint32 total_reward_students = 1; // 可以抢到海星的总人数
+    uint32 taken_reward_students = 2; // 已经抢到海星的人数
+}
+
+message GenRushRewardReq {
+    uint32 rush_ratio = 1; // 抢到人数的百分比 例如10 20 默认带 %
+    uint32 reward_limit_start = 2; // 学生每次获得海星数额的下界 最小为 1
+    uint32 reward_limit_end = 3; // 学生每次获得海星数额的的上界 最大为 10
+}
+
+message GenRushRewardRes {
+    string rush_reward_id = 1; // 抢海星活动 id
+}
+
+message GenRushRewardBroadcast {
+    RewardDetail reward_detail = 1;
+    string rush_reward_id = 2; // 抢海星活动 id
+}
+
+message DoRushRewardReq {
+    string rush_reward_id = 1;
+}
+
+message DoRushRewardRes {
+    RewardDetail reward_detail = 1;
+    uint32 rush_reward_taken = 2; // 抢到的海星数目
+    string rush_reward_id = 3;
+    string student_id = 4;
+    string nickname = 5;
+    string avatar_url = 6;
+}
+
+message DoRushRewardBroadcast {
+    RewardDetail reward_detail = 1;
+    string rush_reward_id = 2;
+}
+
+message RewardRankList {
+    string group_name = 1;
+    uint32 group_id = 2;
+    uint32 rank_count = 3;
+}
+
+message GetRewardRankListReq {
+    string rush_reward_id = 1;
+}
+
+message GetRewardRankListRes {
+    repeated RewardRankList reward_rank_list = 1;
+    string rush_reward_id = 2;
+    uint32 rush_ratio = 3; // 当前已抢进度
+}
+
+message GetStudentRankListReq {
+    string rush_reward_id = 1;
+}
+
+message StopRushRewardReq {
+    string rush_reward_id = 1;
+}
+
+message RingTheBellReq {
+    uint32 ring_type = 1; // 1. 上课铃 2. 下课铃
+}
+
+message StudentRankList {
+    uint32 rush_reward_taken = 1; // 抢到的海星数目
+    string student_id = 2;
+    string nickname = 3;
+    string avatar_url = 4;
+}
+
+message GetStudentRankListRes {
+    string rush_reward_id = 1;
+    repeated StudentRankList student_rank_list = 2;
+}
+
+message StopRushRewardRes {
+    string rush_reward_id = 1;
+}
+
+message StopRushRewardBroadCast {
+    RewardDetail reward_detail = 1;
+    string rush_reward_id = 2;
+}
+
+message RingTheBellRes {
+}
+
+message RingTheBellBroadCast {
+    string live_id = 1;
+    uint32 ring_type = 2; // 1. 上课铃 2. 下课铃
+    uint32 ring_duration = 3; // 铃响时长(单位: s)
+}
+
+message RushRewardCountReq {
+}
+
+message RushRewardCountRes {
+    uint32 total_rush_reward_count = 1; // 本次直播总共可以发起抢海星的次数
+    uint32 taken_rush_reward_count = 2; // 本次直播已经发起的抢海星次数
+}
+
+message NoFinishRushRewardDetail {
+    uint32 rush_ratio = 1; // 抢到人数的百分比 例如10 20 默认带 %
+    uint32 reward_limit_start = 2; // 学生每次获得海星数额的下界 最小为 1
+    uint32 reward_limit_end = 3; // 学生每次获得海星数额的的上界 最大为 10
+    uint64 timestamp = 4; // 抢海星活动启动时间
+}
+
+message NoFinishRushRewardList {
+    string rush_reward_id = 1;
+    NoFinishRushRewardDetail rush_reward_detail = 2;
+}
+
+message RushRewardNoFinishP2p {
+    repeated NoFinishRushRewardList no_finish_rush_reward_list = 1;
+}
+
+message VoiceReadLevelAnalysisItem {
+    uint32 level = 1;
+    uint32 user_count = 2;
+}
+
+message VoiceReadUserResultItem {
+    string user_id = 1;
+    string nickname = 2;
+    string avatar_url = 3;
+    uint32 time = 4; //用时，单位毫秒
+    string voice_url = 5;
+    uint64 voice_duration = 6; // 录音时长
+}
+
+message VoiceReadLevelAnalysis {
+    string question_id = 1; //请求参数
+    repeated VoiceReadLevelAnalysisItem analysis_list = 2; //响应参数，级别人数统计
+    repeated VoiceReadUserResultItem good_user_list = 3; //响应参数，优质语音答题用户列表
+    uint32 user_total = 4; //响应参数 答题人数
+    uint32 level = 5;
+}
+
+message VoiceReadStop {
+    string question_id = 1; //请求/响应参数
+}
+
+enum VoteType {
+    OTHER = 0;
+    SIGNLE_RIGHT_FOUR_CHOICE = 1;
+    SIGNLE_RIGHT_MULTIPLE_CHOICE = 2;
+    MULTIPLE_CHOICE = 3;
+    NO_RIGHT_CHOICE = 4;
+    NO_RIGHT_CHOICE_MULTI = 5;
+    NO_RIGHT_SURVEY = 6;
+}
+
+message StageWindowInfo {
+    string window_id = 1;
+    string user_id = 2;
+}
+message StageOutWindow {
+    string window_id = 1;
+    Point point = 2;
+    uint32 width = 3;
+    uint32 height = 4;
+    string user_id = 5;
+}
+
+message ChangeRtcRoomWindowList {
+    repeated StageWindowInfo window_list = 1;
+    repeated StageOutWindow stage_list = 2;
+}
+
+message RtcRoomWindowLocation {
+    string window_id = 1; //上下台需要参数
+    Point point = 2; //上台可选参数,移动窗口时必传，标识当前窗口被移动到的位置
+    uint32 width = 3; //上台可选参数
+    uint32 height = 4; //上台可选参数
+    string user_id = 5;
+}
+
+message RtcRoomWindowRecover {
+    string window_id = 1;
+    string user_id = 2;
+}
+
+message ReadSentenceStop {
+    string question_id = 1;
+}
+
+enum QuestionType {
+    TYPE_OTHER  = 0;
+    TYPE_VOTE  = 1;
+    TYPE_VOICE = 2;
+    TYPE_SENTENCE = 3;
+}
+
+message PublicClassStartStageUp {
+    string stage_id = 1;
+}
+
+message PublicClassLetUserStageDown {
+    string stage_id = 1;
+    string user_id = 2;
+}
+
+message PublicClassStopStageUp {
+    string stage_id = 1;
+}
+
+enum SpecialAwardType {
+    OTHER_SPECIAL_AWARD = 0;
+    VIRTUAL_COMMODITY = 1;
+    REAL_COMMODITY = 2;
+    GIVE_TIME = 3;
+}
+
+message SpecialAward {
+    SpecialAwardType type = 1;
+    string commodity_id = 2;
+    string src_url = 3;
+    string award_name = 4;
+    bool has_been_sent = 5;
+}
+
+message ReadyToStartClass {
+    uint32 preparation_time = 1;
+}
+
+message PrivateChat {
+    uint32 chat_id = 1;
+    string content = 2;
+    string to_user_id = 3;
+    uint32 ip = 4;
+    string user_id = 5;
+    string nickname = 6;
+    uint32 user_type = 7;
+    uint32 device_type = 8;
+    string avatar_url = 9;
+    string adornment_url = 10;
+    uint64 created_at = 11;
+    uint32 room_index = 12;
+}
+
+enum ExaminationType {
+    OTHER_EXAMINATION = 0;
+    BEFORE_CLASS = 1;
+    IN_CLASS = 2;
+    AFTER_CLASS = 3;
+}
+
+enum LotteryType {
+    LOTTERY_OTHER = 0;
+    LOTTERY_DEFAULT = 1;
+    LOTTERY_REWARD = 2;
+}
+
+enum VideoSourceType {
+    VIDEO_SOURCE_OTHER = 0;
+    VIDEO_SOURCE_PPT = 1;
+    VIDEO_SOURCE_FULLSCREEN = 2;
+    VIDEO_SOURCE_GREEN_SCREEN = 3;
+    VIDEO_SOURCE_HALF_LIVE = 4;
+    VIDEO_SOURCE_DOUBLE_TEACHER = 5;
+    VIDEO_SOURCE_HALF_LIVE_SMALL_CLASS = 6;
+}
+
+enum CoursewareCompleteLevel {
+    COURSEWARE_COMPLETE_OTHER = 0;
+    COURSEWARE_COMPLETE_ALL_WRONG = 1;
+    COURSEWARE_COMPLETE_PARTIAL_RIGHT = 2;
+    COURSEWARE_COMPLETE_ALL_RIGHT = 3;
+}
+enum CoursewareExerciseSubmitType {
+    COURSEWARE_EXERCISE_SUBMIT_OTHER = 0;
+    COURSEWARE_EXERCISE_SUBMIT_COMMIT = 1;
+    COURSEWARE_EXERCISE_SUBMIT_GUIDE = 2;
+    COURSEWARE_EXERCISE_SUBMIT_STATISTICS = 4;
+    COURSEWARE_EXERCISE_SUBMIT_VOICE = 5;
+    COURSEWARE_EXERCISE_SUBMIT_OPERATION = 6;
+}
+
+message CoursewareQuestion {
+    message QuestionData {
+        string voice_content = 1;
+    }
+    repeated string right_answer = 1;
+    string question_type = 2;
+    CoursewareExerciseSubmitType submit_type = 3;
+    QuestionData question_data = 4;
+    bool has_right_answer = 5;
+}
+
+message CheckCoursewareExerciseStatusReq {
+}
+
+message CheckCoursewareExerciseStatusRes {
+    message CoursewareExerciseUserAnswer {
+        uint32 question_index = 1;
+        repeated string courseware_exercise_answers = 2;
+        uint32 reward_count = 3;
+        uint32 pet_reward_cout = 4;
+        CoursewareCompleteLevel complete_level = 5;
+        string courseware_question_type = 6;
+        string question_type = 7;
+    }
+    string courseware_exercise_id = 1;
+    string courseware_id = 2;
+    string courseware_url = 3;
+    uint32 questions_count = 4;
+    repeated CoursewareQuestion courseware_questions = 5;
+    uint32 page_num = 6;
+    uint32 countdown_seconds = 7;
+    uint64 courseware_exercise_start_time = 8;
+    repeated CoursewareExerciseUserAnswer answered_questions = 9;
+}
+
+message CoursewareOptions {
+    string courseware_option_name = 1;
+    uint32 courseware_option_count = 2;
+}
+message CoursewareBlanks {
+    string courseware_blank_name = 1;
+    uint32 courseware_blank_right_count = 2;
+}
+
+message CoursewareAnalysis {
+    uint32 right_first_time_count = 1;
+    uint32 right_other_time_count = 2;
+    repeated CoursewareOptions courseware_options = 3;
+    repeated CoursewareBlanks courseware_blanks = 4;
+}
+
+message GetCoursewareExerciseStudentRankReq {
+    string courseware_exercise_id = 1;
+    uint32 question_index = 2;
+    uint32 page_num = 3;
+    uint32 page_size = 4;
+}
+message GetCoursewareExerciseStudentRankRes {
+    message CoursewareExerciseStudentRank {
+        User user_info = 1;
+        uint32 rank = 2;
+        uint32 duration = 3;
+        uint32 answer_time = 4;
+        bool is_right = 5;
+    }
+    string courseware_exercise_id = 1;
+    uint32 question_index = 2;
+    repeated CoursewareExerciseStudentRank courseware_exercise_student_rank = 3;
+    uint32 total_num = 4;
+}
+message GetCoursewareExerciseGroupRankReq {
+    string courseware_exercise_id = 1;
+    uint32 question_index = 2;
+}
+message GetCoursewareExerciseGroupRankRes {
+    message CoursewareExerciseGroupRank {
+        uint32 group_id = 1;
+        string asistant_user_id = 2;
+        string asistant_user_nickname = 3;
+        uint32 right_user_count = 4;
+        uint32 rank = 5;
+        uint32 completed_user_count = 6;
+        uint32 complete_rate = 7;
+    }
+    string courseware_exercise_id = 1;
+    uint32 question_index = 2;
+    repeated CoursewareExerciseGroupRank courseware_exercise_group_rank = 3;
+}
+
+message GroupCompetitionInfo {
+    enum GroupCompetitionColor {
+        GROUP_COMPETITION_OTHER = 0;
+        GROUP_COMPETITION_RED = 1;
+        GROUP_COMPETITION_BLUE = 2;
+    }
+    uint32 group_id = 1;
+    string asistant_user_id = 2;
+    string asistant_user_nickname = 3;
+    bool is_precede = 4;
+    float right_rate = 5;
+    uint32 rank = 6;
+    uint32 vs_group_id = 7;
+    GroupCompetitionColor group_color = 8;
+}
+message GroupCompetitionCouple {
+    GroupCompetitionInfo group_one = 1;
+    GroupCompetitionInfo group_two = 2;
+}
+message GetGroupCompetitionConfigReq {
+}
+message GetGroupCompetitionConfigRes {
+    repeated GroupCompetitionCouple group_competition_config = 1;
+    string unfinished_group_competition_id = 2;
+}
+message GroupCompetitionStartReq {
+}
+message GroupCompetitionStartRes {
+    string group_competition_id = 1;
+}
+message GroupCompetitionStartBroadcast {
+    string group_competition_id = 1;
+    GroupCompetitionCouple group_competition_start = 2;
+}
+message GetGroupCompetitionVictoryStatusReq {
+    string group_competition_id = 1;
+}
+message GetGroupCompetitionVictoryStatusRes {
+    string group_competition_id = 1;
+    repeated GroupCompetitionCouple group_competition_victory_status = 2;
+}
+message GetGroupCompetitionRightRateRankReq {
+    string group_competition_id = 1;
+}
+message GetGroupCompetitionRightRateRankRes {
+    string group_competition_id = 1;
+    repeated GroupCompetitionInfo group_competition_right_rate_rank = 2;
+}
+message GroupCompetitionShowVictoryStatusReq {
+    string group_competition_id = 1;
+}
+message GroupCompetitionShowVictoryStatusRes {
+}
+message GroupCompetitionShowVictoryStatusBroadcast {
+    string group_competition_id = 1;
+    GroupCompetitionInfo victory_status = 2;
+    bool is_group_competition_complete = 3;
+}
+message GroupCompetitionPraiseStudentReq {
+    string group_competition_id = 1;
+    repeated uint32 group_list = 2;
+}
+message GroupCompetitionPraiseStudentRes {
+}
+message GroupCompetitionPraiseStudentBroadcast {
+    string group_competition_id = 1;
+}
+message GroupCompetitionEncourageStudentReq {
+    string group_competition_id = 1;
+    repeated uint32 group_list = 2;
+}
+message GroupCompetitionEncourageStudentRes {
+}
+message GroupCompetitionEncourageStudentBroadcast {
+    string group_competition_id = 1;
+}
+message GroupCompetitionRewardStudentReq {
+    string group_competition_id = 1;
+    repeated uint32 group_list = 2;
+}
+message GroupCompetitionRewardStudentRes {
+}
+message GroupCompetitionRewardStudentBroadcast {
+    string group_competition_id = 1;
+    uint32 reward_count = 2;
+}
+message GroupCompetitionStopReq {
+    string group_competition_id = 1;
+}
+message GroupCompetitionStopRes {
+}
+message GroupCompetitionStopBroadcast {
+    string group_competition_id = 1;
+}
+message GroupCompetitionShowTotalRankReq {
+    string group_competition_id = 1;
+    repeated GroupCompetitionInfo group_competition_rank = 2;
+}
+message GroupCompetitionShowTotalRankBroadcast {
+    string group_competition_id = 1;
+    repeated GroupCompetitionInfo group_competition_rank = 2;
+}
+message GetGroupCompetitionStudentConfigReq {
+}
+message GetGroupCompetitionStudentConfigRes {
+    GroupCompetitionCouple group_competition_config = 1;
+    string unfinished_group_competition_id = 2;
+}
+
+message QueryPraiseStudentListByAssistReq {
+}
+
+
+message QueryPraiseStudentListByAssistRes {
+    message PraiseListInfo {
+        string assist_id = 1;
+        string assist_name = 2;
+        repeated string praise_list = 3;
+    }
+    repeated PraiseListInfo praise_list_info = 1;
+}
+
+message StudyTogetherMsg {
+    float overcome_rate = 1;
+    string content = 2;
+}
+
+message GetVoiceGroupRankReq {
+    string question_id = 1;
+    uint32 page_num = 2;
+    uint32 page_size = 3;
+}
+
+
+message GetVoiceGroupRankRes {
+    message VoiceGroupRank {
+        uint32 index = 1;
+        uint32 group_id = 2;
+        string asistant_name = 3;
+        uint32 level_five_count = 4;
+    }
+    string question_id = 1;
+    repeated VoiceGroupRank group_rank_lists = 2;
+    uint32 total_num = 3;
+    uint32 total_page = 4;
+    uint32 current_page = 5;
+}
+
+message GetReadGroupRankReq {
+    string question_id = 1;
+    uint32 page_num = 2;
+    uint32 page_size = 3;
+}
+
+ message GetReadGroupRankRes {
+    message ReadGroupRank {
+        uint32 index = 1;
+        uint32 group_id = 2;
+        string asistant_name = 3;
+        uint32 count = 4;
+    }
+    string question_id = 1;
+    repeated ReadGroupRank group_rank_lists = 2;
+    uint32 total_num = 3;
+    uint32 total_page = 4;
+    uint32 current_page = 5;
+}
+
+message GetOnlineGroupListReq {
+}
+message GetOnlineGroupListRes {
+    message GroupInfo {
+        uint32 group_id = 1;
+        string asistant_name = 2;
+        float right_rate = 3;
+    }
+    repeated GroupInfo group_lists = 1;
+}
+
+enum MessageToGroupType {
+    MESSAGE_OTHER = 0;
+    MESSAGE_PRAISE = 1;
+    MESSAGE_ENCOURAGE = 2;
+} 
+
+message EncouragePraiseGroup {
+    uint32 group_id = 1;
+    string asistant_name = 2;
+    MessageToGroupType type = 3;
+}
+enum LayoutType {
+    LAYOUT_OTHER = 0;
+    LAYOUT_NORMAL = 1;
+    LAYOUT_THREE_SCREEN = 2;
+}
+
+message JoinRoomBroadcast {
+    VideoSourceType video_source_type = 1;
+    LayoutType layout_type = 2;
+}
+
+message VoteGroupRankReq { 
+    string question_id = 1;
+}
+
+message VoteGroupRankRes { 
+    message voteGroupRank {
+        string group_id = 1;
+        string assistant_name = 2;
+        uint32 vote_user_count = 3;
+        float vote_right_rate = 4;
+    }
+    string question_id = 1;
+    VoteType type = 2;
+    repeated voteGroupRank group_rank = 3;
+}
+
+message CreateTagReq { 
+}
+
+message CreateTagRes { 
+}
+
+message ContinueRightP2P {
+    uint32 continue_right_num = 1;
+}
+
+message MVPBroadcast {
+    string user_id = 1;
+}
+
+message UserAndGroupInfo {
+    uint32 continue_right_num = 1;
+    string mvp_user_id = 2;
+}
+
+message PetStates {
+    string pet_states_config_json = 1;
+}
+
+message ClosePraiseStudentListReq {
+}
+message ClosePraiseStudentListRes {
+}
+message ClosePraiseStudentListBroadcast {
+}
+
+
+message PraiseStudentListBroadcast {
+    message PraiseStudentInfo {
+        string user_id = 1;
+        string nickname = 2;
+    }
+    repeated PraiseStudentInfo praise_student_list = 1;
+}
+
+message AsistantLiveEndStageUp {
+    LayoutType layout_type = 1;
+}
+
+message AsistantLiveEndStageDown {
+}
+
+message VoteRecords {
+    string user_id = 1;
+    string nickname = 2;
+    bool is_right = 3;
+    repeated string vote_options = 4;
+}
+message QueryEnrollStudentListReq {
+}
+
+message EnrollStudentInfo {
+    string user_id = 1;
+    string nickname = 2;
+}
+
+message QueryEnrollStudentListRes {
+    repeated EnrollStudentInfo enroll_student_list = 1;
+}
+
+message GetLiveMiddleAdReq {
+}
+message LiveMiddleAd {
+    string img = 1;
+    string link = 2;
+    string ad_id = 3;
+    string name = 4;
+}
+
+message LiveMiddleAdShowReq {
+    string ad_id = 1;
+}
+message LiveMiddleAdShowRes {
+}
+message LiveMiddleAdShowEndReq {
+    string ad_id = 1;
+}
+message LiveMiddleAdShowEndRes {
+}
+message LiveMiddleAdShowEndBroadcast {
+    string ad_id = 1;
+}
+
+message SuperSmallClassRtcChannelInfoReq {
+    uint32 get_channel_timers = 1;
+    uint32 count = 2;
+}
+
+message ChannelStudentInfo {
+    string user_id = 1;
+    string nickname = 2;
+    string avatar_url = 3;
+}
+
+message AliRtc {
+    string channel_id = 1;
+    string app_id = 2;
+    string nonce = 3;
+    string user_id = 4;
+    string token = 5;
+    uint64 timestamp = 6;
+    repeated string gslb = 7;
+}
+message ShengwangRtc {
+    string app_id = 1;
+}
+
+message ZeGoRtc {
+    string app_id = 1;  
+    string app_sign = 2;
+    string token = 3;   //web专用
+}
+
+message RtcChannelInfo {
+    string channel_id = 1;
+    repeated ChannelStudentInfo channel_student_list = 2;
+    oneof rtc_info {
+        AliRtc ali_rtc = 3;
+        ShengwangRtc shengwang_rtc = 4;
+        ZeGoRtc zego_rtc = 7;
+    }
+    
+    message StudentStatus {
+        string user_id = 1;
+        uint32 status = 2;      //1 在线 2 加入过房间离开
+    }
+
+    repeated string forbidden_video_user_list = 5;
+    uint32 team_id = 6;
+    repeated StudentStatus student_status_list = 8; //不在列表里时，则未加入过房间
+} 
+message SuperSmallClassRtcChannelInfoRes {
+    repeated RtcChannelInfo small_class_channel_info = 1;
+    uint32 channel_count = 2;
+}
+
+message QuerySmallClassTeamInfoRes {
+    RtcChannelInfo small_class_team_info = 1;
+}
+
+message QuerySmallClassTeamInfoReq {
+    uint32 team_id = 1; //辅导老师或者老师查询具体小队信息时使用
+}
+
+
+message GetLiveMiddleAdListRes {
+    repeated LiveMiddleAd ad_list = 1;
+}
+
+message GiveTheThumbsUpToClassmateReq {
+    string to_user_id = 1;
+}
+message GiveTheThumbsUpToClassmateRes {
+}
+
+message GiveTheThumbsUpToClassmateP2P {
+    string from_user_id = 1;
+    string from_nickname = 2;
+}
+
+message GiveTheThumbsUpNumberP2P {
+    uint32 likes_number = 1;
+}
+
+// 互动课件信息
+message CoursewareConfig {
+    message CoursewarePageInfo {
+        string page_name = 1;
+        uint32 question_count = 2;
+        bool has_question = 3;
+        repeated CoursewareQuestion courseware_questions = 4;
+    }
+    string courseware_id = 1;
+    string base_url = 2;
+    uint32 page_count = 3;
+    float aspect_ratio = 4;
+    repeated CoursewarePageInfo page_list = 5;
+    uint32 version_number = 6;
+    uint32 pages_with_question = 7;//含有互动题的页码个数
+    string courseware_name = 8;
+    uint32 sequence_number = 9;
+    bool is_current_used = 10; // 是否当前直播使用
+    string courseware_zip_url = 11; //互动课件zip包地址
+}
+
+message MixedCoursewareContent {
+    string material_id = 1;
+    string page = 2;
+    uint32 type = 3;
+    string base_url = 4;
+}
+
+message PptInfo {
+    string ppt_id = 1;
+    string zip_download_url = 2;
+}
+
+message MixedCoursewareConfig {
+    string id = 1;
+    string name = 2;
+    repeated CoursewareConfig courseware_list = 3;
+    repeated MixedCoursewareContent content = 4;
+    repeated PptInfo ppt_info_list = 5; // ppt课件详情列表
+}
+
+// 获取混排课件的请求
+message GetMixedCoursewareConfigReq {
+}
+
+message GetMixedCoursewareConfigRes {
+    repeated MixedCoursewareConfig mixed_courseware_content = 1;
+    uint32 mixed_courseware_count = 2;
+}
+message GetSmallClassAliVoiceTokenReq {
+}
+
+message GetSmallClassAliVoiceTokenRes {
+    message Token {
+        string id = 1;           // token 值 
+        uint32 expire_time = 2;  // token 过期时间 单位：秒
+        uint32 time_left = 3;    // token 剩余有效时间 单位：秒
+    }
+    Token token = 1;
+    string app_key = 2;
+}
+
+ message ChangeSmallClassStudentVideoStatusReq {
+    uint32 team_id = 1;
+    string user_id = 2;
+    uint32 video_status = 3;    //0关闭, 1 开启
+}
+message ChangeSmallClassStudentVideoStatusRes {
+    uint32 team_id = 1;
+    string user_id = 2;
+    uint32 video_status = 3;    //0关闭, 1 开启
+}
+
+message ChangeSmallClassStudentVideoStatusBroadcast {
+    uint32 team_id = 1;
+    string user_id = 2;
+    uint32 video_status = 3;    //0关闭, 1 开启
+    uint32 reason = 4;          // 关闭视频原因 1  辅导老师关闭 2 视频违规
+    string img_url = 5;         //违规视频截图oss地址
+
+}
+
+message QuerySmallClassTeamListReq {
+
+}
+
+message QuerySmallClassTeamListRes {
+    message teamStatus {
+        uint32 team_id = 1;
+        uint32 video_status = 2;    //0 有关闭, 1 全部打开状态
+    } 
+    repeated teamStatus team_list = 1;
+}
+
+message QueryOfflineDoubleTeacherRtcReq {
+
+}
+
+message QueryOfflineDoubleTeacherRtcRes {
+    string channle_id = 1;
+    uint32 provider = 2;    // SDK 来源 1 声网 2 拓课 3 腾讯  4 阿里云
+    oneof rtc_info {
+        ShengwangRtc shengwang_rtc = 3;
+    }
+}
+
+message NotifyStudentRewardCountP2p {
+    uint32 reward_count = 1; // 本次直播已经获得的海星数
+}
+
+message NotifyStudentVideoViolationReq {
+    string to_user_id = 1;
+}
+message NotifyStudentVideoViolationRes {
+    string to_user_id = 1;
+}
+
+message NotifyStudentVideoViolationP2p {
+}
+
+
+message RequestMessage {
+
+
+    message ReJoin { //重新加入房间
+        string live_id = 1;
+    }
+    message JoinRoom { //加入房间
+                       string nickname = 1;
+                       string user_id = 2;
+                       string avatar_url = 3;
+                       string live_id = 4;
+                       uint32 user_type = 5;
+                       uint32 room_index = 6;
+                       uint64 timestamp = 7;
+                       string app_id = 8;
+                       string sign = 9;
+                       uint32 live_type = 10;
+    }
+    message LeaveRoom { //下线请求
+                        LeaveReason reason = 1;
+                        string errmsg = 2; //错误信息说明，可为空
+                        string login_id = 3;
+    }
+    message GetLiveInfo { //获取直播状态
+    }
+    message GetPptInfo { //ppt列表
+    }
+    message GetPencilList { //画板
+                            string ppt_id = 1;
+                            uint32 page_num = 2;
+                            uint32 start_pencil_id = 3;
+                            int32 inner_index = 4;
+    }
+    message GetUserList { //用户列表
+                          uint32 page_num = 1;
+                          uint32 page_size = 2;
+    }
+
+    message ContestOpen {
+        uint32 wait_time = 1; // 单位秒
+    }
+
+    message ContestSubmit {
+        string question_id = 1;
+    }
+
+    message ContestClose {
+        string question_id = 1;
+    }
+
+    message ContestQuery {
+        string question_id = 1;
+    }
+
+    message CountDownStart {
+        uint32 wait_time = 1; // 单位秒
+    }
+
+    message CountDownEnd {
+        string time_id = 1;
+    }
+
+    message VoteStart {
+        VoteType type = 1;
+        repeated VoteOption options_array = 2;
+        string vote_description = 3;
+        ChannelName currency_channel_name = 4; // 双师选择题难度
+        uint32 t_minus = 5; // 互动时间
+    }
+
+    message VoteSubmit {
+        string question_id = 1;
+        repeated string option_names = 2;
+        bool is_right = 3;
+        string teacher_id = 4;
+        VoteType type = 5;
+        ChannelName currency_channel_name = 6; // 双师选择题难度    
+    }
+
+    message VoteStop {
+        string question_id = 1;
+        VoteType type = 2;
+    }
+
+    message VoteQuery {
+        string question_id = 1;
+    }
+
+
+    message GetForbidList {
+    }
+
+    message StageUp {
+        string window_id = 1;
+        string user_id = 2;
+        Point point = 3;
+        uint32 width = 4;
+        uint32 height = 5;
+    }
+
+    message StageNotification {
+        bool operate_type = 1;
+        string window_id = 2;
+        uint32 channel_user_id = 3;
+        Point point = 4;
+        string user_id = 5; // 指定下台user_id
+        uint32 width = 6;
+        uint32 height = 7;
+    }
+
+    message GetStageUserList {
+    }
+
+    message RewardReport {
+        uint32 count = 1;
+        string teacher_id = 2;
+        string reward_id = 3;
+    }
+
+    message RewardQuery {
+        uint32 query_range = 1; //1 班组 2 小队, 默认查询班组
+    }
+
+    message RewardQueryAll {
+    }
+
+    message GetChatRecord {
+        uint32 begin_id = 1;
+        uint32 page_size = 2;
+    }
+
+    message GetPrivilegeUser {
+        uint32 type = 1;
+    }
+
+    message RefuseStageUp {
+        string teacher_id = 1;
+    }
+
+    message AddVideoList {
+        uint32 channel_user_id = 1;
+    }
+
+    message VoteQuery1v6 {
+        string question_id = 1;
+    }
+
+    message GetBoardPencilList {
+        uint32 board_id = 1;
+        uint32 start_pencil_id = 2;
+    }
+
+    message QueryMediaInfo {
+    }
+    message GetTeacherOnlineList {
+    }
+    message GetLiveConfig {
+    }
+    message GetMediaStatusLocation {
+    }
+    message NoticeQuery {
+    }
+    message AvailableRewardCount {
+    }
+    message GroupCompeteQuery {
+        string question_id = 1;
+    }
+    message JoinRtcRoom {
+        uint32 channel_user_id = 1;
+    }
+    message GetStandOutUserList {
+    }
+    message ReadSentenceStart {
+        string text = 1;
+        uint64 max_record_time = 2; // 最大录音时间（毫秒）
+    }
+    message ReadSentenceSubmit {
+        string question_id = 1;
+        string text = 2;
+        uint64 record_time = 3; // 录音时长（毫秒）
+        string audio_url = 4;
+        string teacher_id = 5;
+        uint32 err_code = 6; // 0 无错误 1 录音超时 2 用户未授权录音功能 3 其他
+        string err_msg = 7;
+    }
+    message ReadSentenceQuery {
+        string question_id = 1;
+    }
+
+    message VoteRankReq {
+        uint32 query_range = 1;
+    }
+
+    message QuestionScreenshotSaveReq {
+        string question_id = 1;
+        string question_url = 2;
+    }
+    message ForbidChatNoFeel {
+        enum ForbidChatOperation {
+            CHAT_ENABLE = 0;
+            CHAT_DISABLE = 1;
+        }
+        string user_id = 1;
+        ForbidChatOperation operate = 2;
+    }
+    message GetForbidChatNoFeelUserList {
+    }
+    message GetForbidChatTime {
+    }
+    message GetTencentConfig {
+    }
+    message GetRemainLotteryCount {
+    }
+    message LotteryReq {
+        uint32 count = 1;
+        string name = 2;
+        LotteryType lottery_type = 3; // 不填默认为 1
+        uint32 reward_count = 4; // 中奖用户奖励个数
+    }
+    message QuestionnaireAnswer {
+        string question_id = 1;
+        string question_answer = 2;             // 1单选时，该字段为某个选项。2多选时，则为多个选项，每个选项'|'分隔。3 问答题时，如果为一个空则为一个字符串，多个空时，'|'分隔。 4 语音时，为上传语音地址。
+        uint32 question_type = 3;               // 1 单选 2 不定项  3 问答  4语音
+        bool is_right = 4;                      // 问卷类型为调查类型时，此字段没有参考意义
+    }
+    message QuestionnaireAnswerReq {
+        string live_id = 1;
+        string user_id = 2;
+        string teacher_id = 3;
+        string questionnaire_id = 4;
+        uint32 questionnaire_type = 5;          //1 调查类型，2 考试类型
+        uint32 questionnaire_num = 6;
+        repeated QuestionnaireAnswer questionnaire_answer = 7;
+    }
+
+    message QuestionnaireQueryReq {
+    }
+
+    message QuestionnaireReq {
+    }
+
+    message AsistantQueryGroupQuestionResultReq {
+        string question_id = 1;
+    }
+
+    message PublicClassHandsUp {
+        string stage_id = 1;
+        uint32 channel_user_id = 2;
+    }
+
+    message PublicClassQueryHandsUpUserList {
+        string stage_id = 1;
+        uint32 page_num = 2;
+        uint32 page_size = 3;
+    }
+
+    message PublicClassPickHandsUpUserToStage {
+        string user_id = 1;
+        uint32 channel_teacher_id = 2;
+        string stage_id = 3;
+    }
+
+    message PublicClassUserStageUp {
+        string stage_id = 1;
+        uint32 channel_user_id = 2;
+        string teacher_id = 3;
+    }
+
+    message OffLineUserListReq {
+        uint32 page_num = 1;
+        uint32 page_size = 2;
+    }
+    message GetAvailableSpecialAwardList {
+    }
+
+    message SpecialAwardReport {
+        string special_award_id = 1;
+        SpecialAward award = 2;
+        string teacher_id = 3;
+    }
+
+    message SendSpecialAward {
+        SpecialAward award = 1;
+    }
+
+    message AsistantStageUp {
+        string asistant_user_id = 1;
+        repeated uint32 group_list = 2;
+        LayoutType layout_type = 3;
+    }
+
+    message AsistantStageDown {
+        string asistant_user_id = 1;
+        repeated uint32 group_list = 2;
+    }
+
+    message QueryAsistantStageStatus {
+    }
+    message MediaDeviceSetReq {
+        bool is_mic_disabled  = 1;
+        bool is_camera_disabled = 2;
+    }
+    message QueryMediaDeviceStatusReq {
+    }
+
+    message PrivateMsgReq {
+        string content = 1;
+        string to_user_id = 2;
+    }
+    message GetPrivateMsgUids {
+    }
+    message GetPrivateMsgByUid {
+        string to_user_id = 1;
+        uint32 begin_id = 2;
+        uint32 page_size = 3;
+    }
+    message ReportLastReadChatId {
+        string to_user_id = 1;
+        uint32 chat_id = 2;
+    }
+
+
+    message PptPencilUndoReq {
+        string ppt_id = 1;
+        uint32 page_num = 2;
+        uint32 pencil_id = 3;
+        int32 inner_index= 4;
+    }
+    message PptPencilRedoReq {
+        string ppt_id = 1;
+        uint32 page_num = 2;
+        uint32 pencil_id = 3;
+        int32 inner_index= 4;
+    }
+    message BoardPencilUndoReq {
+        uint32 board_id = 1;
+        uint32 pencil_id = 2;
+    }
+    message BoardPencilRedoReq {
+        uint32 board_id = 1;
+        uint32 pencil_id = 2;
+    }
+
+    enum ScreenZone {
+        PPT = 0;
+        BOARD = 1;
+    };
+    message TeacherScreenToAssistantReq {
+        string screen_url = 1;
+        ScreenZone screen_zone = 2;
+        string courseware_id = 3;   //ppt_id或者board_id
+        uint32 page = 4;    
+        bool is_auto_screen = 5;
+        string description = 6;
+    }
+
+    message GetPptAnimationCurrentStepReq {
+        string ppt_id = 1;
+        uint32 page_num = 2;
+    }
+
+    message GetExaminationConfigReq {
+    }
+    message StartExaminationReq {
+        string examination = 1;
+        repeated uint32 group_list = 2;
+        repeated uint32 question_index_list = 3;
+        ExaminationType examination_type = 4;
+        repeated uint32 question_type_list = 5;
+        uint32 online_user_count = 6;
+    }
+    message GetExaminationResultOverviewReq {
+        string examination_id = 1;
+        uint32 group_id = 2;
+    }
+    message GetQuestionAnalysisReq {
+        string examination_id = 1;
+        uint32 question_index = 2;
+    }
+    message GetExaminationStudentRankReq {
+        string examination_id = 1;
+        uint32 group_id = 2;
+        uint32 page_num = 3;
+        uint32 page_size = 4;
+
+    }
+    message GetStudentExaminationResultReq {
+        string examination_id = 1;
+        string user_id = 2;
+    }
+    message GetExaminationGroupRankReq {
+        string examination_id = 1;
+        uint32 page_num = 2;
+        uint32 page_size = 3;
+    }
+    message StopExaminationReq {
+        string examination_id = 1;
+        repeated uint32 group_list = 2;
+    }
+    message GetCompletedExaminationListReq {
+    }
+    message ReportExaminationResultReq {
+        string examination_id = 1;
+        uint32 question_index = 2;
+        bool is_right = 3;
+        repeated string examination_options = 4;
+        string teacher_id = 5;
+        string examination_answer = 6;
+        string question_id = 7;
+    }
+    message StudentCompleteExaminationReq {
+        string examination_id = 1;
+        string examination_answer = 2;
+        uint32 examination_score = 3;
+        uint64 examination_start_time = 4;
+    }
+
+    message QueryPraiseStudentListReq {
+        uint32 page_num = 1;
+        uint32 page_size = 2;
+    }
+
+    message StudentReportLeaveLiveReq {
+
+    }
+    message StudentReportBackLiveReq {
+
+    }
+    message CheckExaminationStatusReq {
+        repeated uint32 group_list = 1;
+    }
+    message GetExaminationByIdReq {
+        string examination_id = 1;
+    }
+
+    message SubjectivePhoneticStartReq {
+    }
+
+    message SubjectivePhoneticStopReq {
+        string question_id = 1;
+        uint64 start_time = 2;
+    }
+
+    message SubjectivePhoneticSubmitReq {
+        string question_id = 1;
+        uint64 record_time = 2; 
+        string teacher_id = 3;
+    }
+    message StudentQueryOpenMouthInfoReq {
+        
+    }
+    message TeacherQuerySubjectivePhoneticReq {
+        
+    }
+    message GetLiveNobookExperimentationListReq {
+
+    }
+    message PushLiveNobookExperimentationReq {
+        string experimentation_name = 1;
+        string experimentation_img = 2;
+        string experimentation_addr = 3;
+    }
+
+    message StopLiveNobookExperimentationReq {
+        string experimentation_id = 1;
+    }
+
+    message CommitLiveNobookExperimentationReq {
+        string experimentation_id = 1;
+    }
+
+    message QueryNobookExperimentationGroupRankReq {
+       string experimentation_id = 1;
+       string group_id = 2;
+       uint32 page_size = 3;
+       uint32 page_num = 4;
+    }
+
+    enum ExperimentationStatus {
+        COMMIT = 0;
+        UNCOMMIT = 1;
+    }
+    enum RankType {
+        NORMAL = 0;
+        REVERSE = 1;
+    }
+    message QueryNobookExperimentationStudentRankReq {
+        string experimentation_id = 1;
+        ExperimentationStatus status = 2;
+        RankType rank_type = 3;
+        string group_id = 4;
+        uint32 page_size = 5;
+        uint32 page_num = 6;
+    }
+
+    message CheckNobookExperimentationStatusReq {
+    }
+
+    message CoursewareConfigReq {
+    }
+    message CoursewareExerciseStartReq {
+        string courseware_id = 1;
+        string courseware_url = 2;
+        uint32 questions_count = 3;
+        uint32 online_user_count = 4;
+        repeated CoursewareQuestion courseware_questions = 5;
+        uint32 page_num = 6;
+        uint32 countdown_seconds = 7;
+        uint64 courseware_exercise_start_time = 8;
+    }
+    message CoursewareQuestionReportReq {
+        string courseware_exercise_id = 1;
+        string courseware_id = 2;
+        uint32 question_index = 3;
+        repeated string courseware_exercise_answers = 4;
+        repeated string courseware_exercise_right_answers = 5;
+        string courseware_question_type = 6;
+        CoursewareCompleteLevel complete_level = 7;
+        uint32 page_num = 8;
+        string original_answer_json = 9;
+        uint32 retry_times = 10;
+        repeated string wrong_answer_history = 11;
+        CoursewareExerciseSubmitType submit_type = 12;
+        uint64 courseware_exercise_start_time = 13;
+    }
+    message CoursewareExerciseStopReq {
+        string courseware_exercise_id = 1;
+    }
+    message GetCoursewareExerciseAnalysisReq {
+        string courseware_exercise_id = 1;
+        uint32 question_index = 2;
+    }
+    message GetCoursewareExerciseStatusReq {
+    }
+
+    string token = 1;
+
+    oneof msg_req {
+        JoinRoom join_room = 2;
+        ReJoin re_join = 3;
+        LeaveRoom leave_room = 4;
+        GetLiveInfo get_live_info = 5;
+        GetPptInfo get_ppt_info = 6;
+        GetPencilList get_pencil_list = 8;
+        GetUserList get_user_list = 9;
+        Chat chat = 10;
+        ForbidChat forbid_chat = 11;
+        ChangeLiveStatus live_status_change = 12;
+        ChatControl chat_control = 13;
+        ChangePptPage change_ppt_page = 14;
+        Pencil pencil = 16;
+        StreamStatusChange stream_status_change = 17;
+        ContestOpen open_contest = 18;
+        ContestSubmit submit_contest = 19;
+        ContestClose close_contest = 20;
+        ContestQuery query_contest = 21;
+        CountDownStart count_down_start = 22;
+        CountDownEnd count_down_end = 23;
+        VoteStart vote_start = 24;
+        VoteSubmit submit_vote = 25;
+        VoteStop vote_stop = 26;
+        VoteQuery vote_query = 27;
+        GetForbidList get_forbid_list = 28;
+        StageUp stage_up = 29;
+        StageNotification stage_notification = 30;
+        StageDown stage_down = 31;
+        WindowMove window_move = 32;
+        GetStageUserList get_stage_user_list = 33;
+        RewardIndividual reward_individual = 34;
+        RewardEveryone reward_everyone = 35;
+        RewardReport reward_report = 36;
+        RewardQuery reward_query = 37;
+        Privilege grant_privilege = 38;
+        Privilege revoke_privilege = 39;
+        GetChatRecord get_chat_record = 41;
+        GetPrivilegeUser get_privilege_user = 42;
+        RewardQueryAll reward_query_all = 43;
+        RefuseStageUp refuse_stage_up = 44;
+        AddVideoList add_video_list = 45;
+        ChangeVideoList change_video_list = 46;
+        GetForbidList get_forbid_list_with_info = 47;
+        StageSimple stage_up_simple = 48;
+        StageSimple stage_down_simple = 49;
+        StageSimple stage_move_simple = 50;
+        RewardRankShow reward_rank_show = 51;
+        HandsUp hands_up = 52;
+        ForbidMic forbid_mic = 53;
+        ForbidMicAll forbid_mic_all = 54;
+        VoteQuery1v6 vote_query_1v6 = 55;
+        BoardPencil add_board_pencil = 56;
+        ChangeBoard change_board = 57;
+        GetBoardPencilList get_board_pencil_list = 58;
+        ChangeMediaStatus change_media_status = 59; //@deprecated
+        QueryMediaInfo query_media_info = 60;
+        GetTeacherOnlineList get_teacher_online_list = 61;
+        MediaLocation media_location_change = 62;
+        GetLiveConfig get_live_config = 63;
+        GetMediaStatusLocation get_media_status_location = 64;
+        MediaStatus set_media_status = 65;
+        Notice notice_publish = 66;
+        NoticeDelete notice_delete = 67;
+        NoticeQuery notice_query = 68;
+        AvailableRewardCount available_reward_count_req = 70;
+        VoiceRead voice_read_start = 71;
+        VoiceReadReport voice_read_report = 72;
+        VoiceReadLevelAnalysis voice_read_query = 73;
+        VoiceReadStop voice_read_stop = 74;
+        GroupCompeteQuery group_compete_query = 76;
+
+        JoinRtcRoom join_rtc_room = 78;
+        ChangeRtcRoomWindowList change_rtc_room_window_list = 79;
+        RtcRoomWindowLocation rtc_room_window_stand_out = 80;
+        RtcRoomWindowRecover rtc_room_window_recover = 81;
+        RtcRoomWindowLocation stand_out_window_move = 82;
+        GetStandOutUserList get_stand_out_window_list = 83;
+        ForbidRtcMic forbid_rct_mic = 84;
+        RtcHandsUp rtc_hands_up = 85;
+        ForbidRtcVideo forbid_rct_video = 86;
+        ReadSentenceStart read_sentence_start = 87;
+        ReadSentenceSubmit read_sentence_submit = 88;
+        ReadSentenceQuery read_sentence_query = 89;
+        ReadSentenceStop read_sentence_stop = 90;
+        VoteRankReq vote_rank_req = 91;
+        QuestionScreenshotSaveReq question_screenshot_save = 92;
+        ForbidChatNoFeel forbid_chat_no_feel = 93;
+        GetForbidChatNoFeelUserList get_forbid_chat_no_feel_user_list = 94;
+        GetForbidChatTime get_forbid_chat_time = 95;
+        GetTencentConfig get_tenctent_config = 96;
+        GetRemainLotteryCount get_remain_lottery_count = 97;
+        LotteryReq lottery_req = 98;
+        QuestionnaireQueryReq questionnaire_query_req = 100;
+        QuestionnaireReq questionnaire_req = 101;
+        QuestionnaireAnswerReq questionnaire_answer_req = 102;
+        AsistantQueryGroupQuestionResultReq asistant_query_group_question_result_req = 103;
+        PublicClassStartStageUp public_class_start_stage_up_req = 104;
+        PublicClassHandsUp public_class_hands_up_req = 105;
+        PublicClassQueryHandsUpUserList public_class_query_hands_up_user_list_req = 106;
+        PublicClassPickHandsUpUserToStage public_class_pick_hands_up_user_to_stage_req = 107;
+        PublicClassUserStageUp public_class_user_stage_up_req = 108;
+        PublicClassLetUserStageDown public_class_let_user_stage_down_req = 109;
+        PublicClassStopStageUp public_class_stop_stage_up_req = 110;
+        GetAvailableSpecialAwardList get_available_special_award_list_req = 111;
+        SendSpecialAward send_special_award_req = 112;
+        SpecialAwardReport special_award_report_req = 113;
+        OffLineUserListReq off_line_user_list_req = 114;
+        ReadyToStartClass ready_to_start_class_req = 115;
+        AsistantStageUp asistant_stage_up_req = 116;
+        AsistantStageDown asistant_stage_down_req = 117;
+        QueryAsistantStageStatus query_asistant_stage_status_req = 118;
+        MediaDeviceSetReq  media_device_set_req = 121;
+        QueryMediaDeviceStatusReq query_media_device_status_req = 122;
+        PrivateMsgReq private_msg_req = 123;
+        GetPrivateMsgUids get_private_msg_uids_req = 124;
+        GetPrivateMsgByUid get_private_msg_by_uid_req = 125;
+        ReportLastReadChatId reoport_last_read_chat_id_req = 126;
+        PptPencilUndoReq ppt_pencil_undo_req = 127;
+        PptPencilRedoReq ppt_pencil_redo_req = 128;
+        BoardPencilUndoReq board_pencil_undo_req = 129;
+        BoardPencilRedoReq board_pencil_redo_req = 130;
+        TeacherScreenToAssistantReq teacher_screen_to_assistant_req = 131;
+        GetPptAnimationCurrentStepReq get_ppt_animation_current_step_req = 132;
+        GetExaminationConfigReq get_examination_config_req = 133;
+        StartExaminationReq start_examination_req = 134;
+        GetExaminationResultOverviewReq get_examination_result_overview_req = 135;
+        GetQuestionAnalysisReq get_question_analysis_req = 136;
+        GetExaminationStudentRankReq get_examination_student_rank_req = 137;
+        GetStudentExaminationResultReq get_student_examination_result_req = 138;
+        GetExaminationGroupRankReq get_examination_group_rank_req = 139;
+        StopExaminationReq stop_examination_req = 140;
+        GetCompletedExaminationListReq get_complete_examination_list_req = 141;
+        ReportExaminationResultReq report_examination_result_req = 142;
+        StudentCompleteExaminationReq student_complete_examination_req = 143;
+        QueryPraiseStudentListReq query_praise_student_list_req = 144;
+        StudentReportLeaveLiveReq  student_report_leave_live_req = 145;
+        StudentReportBackLiveReq student_report_back_live_req = 146;
+        CheckExaminationStatusReq check_examination_status_req = 147;
+        GetExaminationByIdReq get_examination_by_id_req = 148;
+        SubjectivePhoneticStartReq subjective_phonetic_start_req = 157;
+        SubjectivePhoneticStopReq subjective_phonetic_stop_req = 158;
+        GetLiveNobookExperimentationListReq get_live_nobook_experimentation_list_req = 149;
+        PushLiveNobookExperimentationReq push_live_nobook_experimentation_req = 150;
+        StopLiveNobookExperimentationReq stop_live_nobook_experimentation_req = 151;
+        CommitLiveNobookExperimentationReq commit_live_nobook_experimentation_req = 152;
+        QueryNobookExperimentationGroupRankReq query_nobook_experimentation_group_rank_req = 153;
+        QueryNobookExperimentationStudentRankReq query_nobook_experimentation_student_rank_req = 154;
+        CheckNobookExperimentationStatusReq check_nobook_experimentation_status_req= 155;
+        SubjectivePhoneticSubmitReq subjective_phonetic_submit_req = 159;
+        StudentQueryOpenMouthInfoReq student_query_open_mouth_info_req = 160;
+        TeacherQuerySubjectivePhoneticReq teacher_query_subjective_phonetic_req = 161;
+        CoursewareConfigReq courseware_config_req = 163;
+        CoursewareExerciseStartReq courseware_exercise_start_req = 164;
+        CoursewareQuestionReportReq courseware_question_report_req = 165;
+        CoursewareExerciseStopReq courseware_exercise_stop_req = 166;
+        GetCoursewareExerciseAnalysisReq get_courseware_exercise_analysis_req = 167;
+        GetCoursewareExerciseStatusReq get_courseware_exercise_status_req = 168;
+        CheckCoursewareExerciseStatusReq check_courseware_exercise_status_req = 169;
+        GetCoursewareExerciseStudentRankReq get_courseware_exercise_student_rank_req = 170;
+        GetCoursewareExerciseGroupRankReq get_courseware_exercise_group_rank_req = 171;
+        GetGroupCompetitionConfigReq get_group_competition_config_req = 172;
+        GroupCompetitionStartReq group_competition_start_req = 173;
+        GetGroupCompetitionVictoryStatusReq get_group_competition_victory_status_req = 174;
+        GetGroupCompetitionRightRateRankReq get_group_competition_right_rate_rank_req = 175;
+        GroupCompetitionShowVictoryStatusReq group_competition_show_victory_status_req = 176;
+        GroupCompetitionPraiseStudentReq group_competition_praise_student_req = 177;
+        GroupCompetitionEncourageStudentReq group_competition_encourage_student_req = 178;
+        GroupCompetitionRewardStudentReq group_competition_reward_student_req = 179;
+        GroupCompetitionStopReq group_competition_stop_req = 180;
+        GroupCompetitionShowTotalRankReq group_competition_show_total_rank_req = 181;
+        QueryPraiseStudentListByAssistReq query_praise_student_list_by_assist_req = 182;
+        GetGroupCompetitionStudentConfigReq get_group_competition_student_config_req = 183;
+        GetVoiceGroupRankReq get_voice_group_rank_req = 184;
+        GetReadGroupRankReq  get_read_group_rank_req = 185;
+        GetOnlineGroupListReq  get_online_group_list_req = 186;
+        EncouragePraiseGroup  encourage_praise_group_req = 187;
+        VoteGroupRankReq vote_group_rank_query_req = 189;
+        CreateTagReq create_tag_req = 190;
+        ClosePraiseStudentListReq close_praise_student_list_req = 195;
+        AsistantLiveEndStageUp asistant_live_end_stage_up_req = 197;
+        AsistantLiveEndStageDown asistant_live_end_stage_down_req =198;
+        QueryEnrollStudentListReq query_enroll_student_list_req = 200;
+        GetLiveMiddleAdReq get_live_middle_ad_req = 201;
+        LiveMiddleAdShowReq live_middle_ad_show_req = 202;
+        LiveMiddleAdShowEndReq live_middle_ad_show_end_req = 203;
+        
+        GetLiveMiddleAdReq get_live_middle_ad_list_req = 204;
+        LiveMiddleAd show_live_middle_ad_item_req = 205;
+
+        GetMixedCoursewareConfigReq get_mixed_courseware_config_req = 206;
+
+        SuperSmallClassRtcChannelInfoReq super_small_class_rtc_channel_info_req = 207;
+        QuerySmallClassTeamInfoReq query_small_class_team_info_req = 208;
+        GiveTheThumbsUpToClassmateReq give_the_thumbs_up_to_classmate_req = 209;
+
+        GenRushRewardReq gen_rush_reward_req = 210;
+        DoRushRewardReq do_rush_reward_req = 211;
+        GetRewardRankListReq get_reward_rank_list_req = 212;
+        GetStudentRankListReq get_student_rank_list_req = 213;
+
+        GetSmallClassAliVoiceTokenReq get_small_class_ali_voice_token_req = 215;
+
+        ChangeSmallClassStudentVideoStatusReq change_small_class_student_video_status_req = 216;
+        
+        QuerySmallClassTeamListReq query_small_class_team_list_req = 217;
+
+        StopRushRewardReq stop_rush_reward_req = 218;
+        
+        RingTheBellReq ring_the_bell_req = 219;
+
+        QueryOfflineDoubleTeacherRtcReq query_offline_double_teacher_rtc_req = 220;
+
+        RushRewardCountReq rush_reward_count_req = 221;
+
+        NotifyStudentVideoViolationReq notify_student_video_violation_req = 224;
+    }
+}
+
+message ResponseMessage {
+
+    message CountDownStatus {
+        uint64 start_time = 1;
+        uint32 wait_time = 2;
+    }
+
+    message liveConfigUrls {
+        string live_page_not_start = 1;
+        string live_page_stoped = 2;
+    }
+
+    message JoinRoom {
+        string token = 1;
+        repeated int32 groups = 2;
+        bool is_forbidden = 3;
+        bool chat_disabled = 4;
+        LiveInfo live_info = 5;
+        uint64 date = 6;
+        CountDownStatus count_down = 7;
+        bool group_chat_disabled = 8;
+        LiveStatus live_status = 9;
+        PptBoardStatus ppt_board_status = 10;
+        liveConfigUrls live_config_urls = 11;
+        uint32 max_age = 12; //token 生命周期
+        string adornment_url = 13;
+        VideoSourceType video_source_type = 14;
+        LayoutType layout_type = 15;
+    }
+
+    message ReJoin {
+        string token = 1;
+        bool is_forbidden = 2;
+        bool chat_disabled = 3;
+        uint64 date = 4;
+        CountDownStatus count_down = 5;
+        bool group_chat_disabled = 6;
+        LiveStatus live_status = 7;
+        PptBoardStatus ppt_board_status = 8;
+        liveConfigUrls live_config_urls = 9;
+        uint32 max_age = 10; //token 生命周期
+        VideoSourceType video_source_type = 11;
+        LayoutType layout_type = 12;
+    }
+
+
+    message GetLiveInfo {
+        message Stream {
+            string password = 1;
+        }
+        message Config {
+            uint32 provider = 1;
+            string third_id = 2;
+            Stream stream = 3;
+        }
+        string course_name = 1;
+        string begin_time = 2;
+        string end_time = 3;
+        LiveStatus status = 4;
+        Config config = 5;
+    }
+
+    message GetPptInfo {
+        string current_id = 1;
+        uint32 current_page = 2;
+        repeated Ppt ppts = 3;
+        string base_url = 4;
+        uint32 current_step = 5;
+        uint32 current_width = 6;
+        uint32 current_height = 7;
+        string current_name = 8;
+        uint32 current_page_count = 9;
+        int32 current_inner_index = 10;
+        PptType current_ppt_type = 11;
+        string current_zip_url = 12;
+    }
+
+    message PencilRes {
+        uint32 type = 1;
+        uint32 pencil_id = 2;
+    }
+
+    message GetPencilList {
+        repeated Pencil pencils = 1;
+        uint32 current_step = 2;
+    }
+
+
+    message GetUserList {
+        repeated User users = 1;
+        uint32 total_num = 2;
+        uint32 total_page = 3;
+        uint32 current_page = 4;
+    }
+
+    message GetForbidList {
+        uint32 code = 1;
+        repeated string user_id = 2;
+    }
+
+    message Nothing {
+
+    }
+    message UserListChangeBroadcast {
+        enum ChangeType {
+            ENTER_ROOM = 0;
+            LEAVE_ROOM = 1;
+        }
+        string user_id = 1;
+        string nickname = 2;
+        string avatar_url = 3;
+        uint32 user_type = 4;
+        ChangeType change_type = 5;
+        uint32 device_type = 6;
+        uint32 ip = 7;
+    }
+
+
+    message ChatRes {
+        uint32 chat_id = 1;
+    }
+
+    message ContestSubmitRes {
+        string question_id = 1;
+    }
+
+    message ContestSubmitBroadcast {
+        string question_id = 1;
+        string user_id = 2;
+        string nickname = 3;
+        string avatar_url = 4;
+        uint32 rank = 5;
+        uint32 time_used = 6;
+    }
+
+    message ContestCloseBroadcast {
+        string question_id = 1;
+    }
+
+    message ContestQueryRes {
+        uint32 count = 1;
+        string question_id = 2;
+    }
+
+    message VoteStartRes {
+        string question_id = 1;
+        uint64 timestamp = 2;
+        uint32 t_minus = 3;
+    }
+
+    message VoteStartBroadcast {
+        uint32 type = 1;
+        repeated VoteOption options_array = 2;
+        string question_id = 3;
+        string teacher_id = 4;
+        bool belong_continue_right = 5;
+        string vote_description = 6;
+        ChannelName currency_channel_name = 7; // 双师选择题难度
+        uint32 t_minus = 8;
+        uint64 timestamp = 9; // 老师发题时间
+    }
+
+    message VoteStartNewBroadcast {
+        VoteType type = 1;
+        repeated VoteOption options_array = 2;
+        string question_id = 3;
+        string teacher_id = 4;
+        string vote_description = 5;
+        bool belong_continue_right = 6;
+        ChannelName currency_channel_name = 7; // 双师选择题难度
+        uint32 t_minus = 8;
+        uint64 timestamp = 9; // 老师发题时间
+    }
+
+    message VoteStudentList {
+        string student_id = 1;
+        string nickname = 2;
+        string avatar_url = 3;
+    }
+
+    message VoteSubmitRes {
+        uint32 reward_count = 1;
+        VoteType type = 2;
+        uint32 pet_reward_count = 3;
+        repeated VoteStudentList fastest_submit_list = 4;
+        uint32 submit_ratio = 5;
+        uint32 has_submit_reward_count = 6;
+    }
+
+    //    message VoteSubmitBroadcast {
+    //        string question_id = 1;
+    //        string option_name = 2;
+    //        string from_user_id = 3;
+    //        string from_nickname = 4;
+    //        string from_avatar_url = 5;
+    //    }
+
+    message VoteUserRank {
+        string user_id = 1;
+        string nickname = 2;
+        string avatar_url = 3;
+        uint32 rank = 4;
+        repeated string option_names = 5;
+    }
+
+    message VoteStopBroadcast {
+        string question_id = 1;
+        repeated VoteUserRank rank_list = 2;
+        VoteType type = 3;
+    }
+
+    message VoteOptionAnalysis {
+        string name = 1;
+        uint32 count = 2;
+    }
+
+    message VoteStopRes {
+        repeated VoteOptionAnalysis result_analysis = 1;
+        repeated string right_users = 2;
+        repeated VoteStudentList right_users_object = 3;
+    }
+
+    message VoteQueryRes {
+        string question_id = 1;
+        repeated VoteOptionAnalysis result_analysis = 2;
+        repeated string right_users = 3;
+        uint32 right_number = 4;
+        uint32 total_number = 5;
+        repeated VoteRecords vote_records = 6;
+    }
+
+    message GetForbidListRes {
+        repeated string user_ids = 1;
+    }
+
+    message GetForbidListWithInfoRes {
+        repeated ForbidChat forbid_list = 1;
+    }
+
+    message GetBoardPencilRes {
+        uint32 board_id = 1;
+        repeated BoardPencil pencils = 2;
+    }
+
+    message StageUser {
+        string window_id = 1;
+        string user_id = 2;
+        string nickname = 3;
+        string avatar_url = 4;
+        uint32 user_type = 5;
+        uint32 channel_user_id = 6;
+        Point point = 7;
+        uint32 width = 8;
+        uint32 height = 9;
+        uint32 device_type = 10; // {Number} 设备类型
+    }
+
+    message GetStageUserListRes {
+        repeated StageUser user_list = 1;
+    }
+
+    message RewardUser {
+        uint32 rank = 1;
+        string user_id = 2;
+        string nickname = 3;
+        string avatar_url = 4;
+        uint32 count = 5;
+        string adornment_url = 6;
+    }
+
+    message RewardQueryRes {
+        uint32 user_rank = 1;
+        uint32 user_count = 2;
+        repeated RewardUser user_list = 3;
+    }
+
+    message RewardQueryAllRes {
+        repeated RewardUser user_list = 1;
+    }
+
+    message StageNotificationRes {
+        bool operate_type = 1;
+        string window_id = 2;
+        string user_id = 3;
+        uint32 user_type = 4;
+        uint32 channel_user_id = 5;
+        string nickname = 6;
+        string avatar_url = 7;
+        Point point = 8;
+        uint32 width = 9;
+        uint32 height = 10;
+        uint32 device_type = 11;
+    }
+
+    message PrivilegeRes {
+        string user_id = 1;
+        uint32 type = 2;
+    }
+
+    message ChatRecord {
+        message Record {
+            uint64 time = 1;
+            string content = 2;
+            string nickname = 3;
+            string avatar_url = 4;
+            string user_id = 5;
+            uint32 chat_id = 6;
+        }
+        uint32 total_num = 1;
+        repeated Record records = 2;
+    }
+
+    message GetPrivilegeUserRes {
+        uint32 type = 1;
+        string user_id = 2;
+        string nickname = 3;
+        string avatar_url = 4;
+    }
+
+    message RefuseStageUpP2P {
+        string user_id = 1;
+    }
+
+    message AddVideoListRes {
+        message UserInfo {
+            string window_id = 1;
+            string user_id = 2;
+            string nickname = 3;
+            string avatar_url = 4;
+            uint32 channel_user_id = 5;
+            uint32 device_type = 6;
+            uint32 user_type = 7;
+            bool is_online = 8;
+        }
+        string window_id = 1;
+        repeated string window_list = 2;
+        repeated UserInfo online_user_list = 3;
+        repeated string mic_disabled_list = 4;
+        repeated string hands_up_list = 5;
+        bool is_mic_disabled_all = 6;
+    }
+
+    message AddVideoListBroadcast {
+        string window_id = 1;
+        string user_id = 2;
+        string nickname = 3;
+        string avatar_url = 4;
+        uint32 channel_user_id = 5;
+        uint32 device_type = 6;
+        uint32 user_type = 7;
+        repeated string window_list = 8;
+        bool is_hands_up = 9;
+        bool is_mic_disabled = 10;
+    }
+
+    message StageUpBroadcast {
+        string user_id = 1;
+        string nickname = 2;
+    }
+
+    message HandsUpBroadcast {
+        string window_id = 1;
+        HandsUpOperationType operation = 2;
+    }
+
+    message RtcHandsUpBroadcast {
+        string user_id = 1;
+        HandsUpOperationType operation = 2;
+    }
+
+    message RewardRankRefresh {
+
+    }
+
+    message VoteMsg {
+        string user_id = 1;
+        string nickname = 2;
+        repeated string option_selected = 3;
+        bool is_right = 4;
+        uint64 time = 5;
+    }
+
+    message VoteQuery1v6Res {
+        string question_id = 1;
+        repeated VoteMsg vote_results = 2;
+    }
+
+    message AddBoardPencilRes {
+        uint32 type = 1;
+        uint32 pencil_id = 2;
+    }
+
+    message BoardPencilUndoRes {
+        uint32 pencil_id = 1;
+    }
+
+    message BoardPencilRedoRes {
+        uint32 pencil_id = 1;
+    }
+
+    message PptPencilUndoRes {
+        uint32 pencil_id = 1;
+    }
+    message PptPencilRedoRes {
+        uint32 pencil_id = 1;
+    }
+
+    message BoardPencilBroadcast {
+        uint32 board_id = 1;
+        uint32 pencil_id = 2;
+    }
+
+    message BoardPencilUndoOrRedoBroadcast {
+        uint32 board_id = 1;
+        uint32 pencil_id = 2;
+    }
+
+    message PptPencilUndoOrRedoBroadcast {
+        string ppt_id = 1;
+        uint32 page_num = 2;
+        uint32 pencil_id = 3;
+        int32 inner_index = 4;
+    }
+
+    message QueryMediaInfoRes {
+        repeated VideoInfo videos = 1;
+        repeated AudioInfo audios = 2;
+        string play_base_url = 3;
+        string thumbnail_base_url = 4;
+    }
+    message GetTeacherOnlineList {
+        repeated User users = 1;
+    }
+    
+    message Come2ClassReward {
+        enum ArriveClassRewardType {
+            REWARD_BE_LATE = 0;                //迟到
+            REWARD_ON_TIME = 1;                //准时
+            REWARD_BEFORE_FIFTEEN_MINUTE = 2;   //提前15分钟
+        }
+        bool is_ontime = 1;
+        uint32 reward_count = 2;
+        ArriveClassRewardType arrive_class_reward_type = 3;
+        string school_id = 4;
+        string school_name = 5;
+        uint32 classmate_num = 6;
+        repeated string classmate_name_list = 7;
+    }
+    message AvailableRewardCountRes {
+        uint32 available_reward_everyone_count = 1;
+    }
+    message GroupCompeteQueryRes {
+        message GroupAccuracyInfo {
+            string group_id = 1;
+            uint32 rank = 2;
+            float accuracy = 3;
+            uint32 right_count = 4;
+            uint32 wrong_count = 5;
+            string asistant_nickname = 6;
+            repeated string right_nicknames = 7;
+            repeated string wrong_nicknames = 8;
+        }
+        repeated GroupAccuracyInfo group_accuracy_rank = 1;
+    }
+    message JoinRtcRoomRes {
+        message RtcUserInfo {
+            string user_id = 1;
+            string nickname = 2;
+            string avatar_url = 3;
+            uint32 channel_user_id = 4;
+            uint32 device_type = 5;
+            uint32 user_type = 6;
+            uint32 seq = 7;
+        }
+        repeated StageWindowInfo window_list = 1;
+        repeated RtcUserInfo user_list = 2;
+        repeated string mic_disabled_list = 3;
+        repeated string hands_up_list = 4;
+        bool is_mic_disabled_all = 5;
+        bool is_video_disabled_all = 6;
+        repeated string video_disabled_list = 7;
+        repeated string offline_user_list = 8;
+        repeated StageOutWindow stage_list = 9;
+    }
+    message JoinRtcRoomBroadcast {
+        string user_id = 1;
+        string nickname = 2;
+        string avatar_url = 3;
+        uint32 channel_user_id = 4;
+        uint32 device_type = 5;
+        uint32 user_type = 6;
+        uint32 seq = 7;
+        repeated StageWindowInfo window_list = 8;
+        bool is_hands_up = 9;
+        bool is_mic_disabled = 10;
+        bool is_video_disabled = 11;
+    }
+
+    message ReadSentenceStartRes {
+        string question_id = 1;
+    }
+    message ReadSentenceStartBroadcast {
+        string text = 1;
+        uint64 max_record_time = 2; // 毫秒
+        string question_id = 3;
+        string teacher_id = 4;
+        bool belong_continue_right = 5;
+    }
+    message ReadSentenceQueryRes {
+        message ReadSentenceInfo {
+            string nickname = 1;
+            uint64 record_time = 2;
+            string audio_url = 3;
+            uint64 used_time = 4; // 答题用时
+            string user_id = 5;
+        }
+        uint32 submit_number = 1;
+        repeated ReadSentenceInfo result_analysis = 2; // 时间正序，最新 50 条
+    }
+
+
+    message SelfScore {
+        string user_id = 1;
+        string nickname = 2;
+        string avatar_url = 3;
+        uint32 count = 4;
+    }
+    message UserRank {
+        string user_id = 1;
+        string nickname = 2;
+        string avatar_url = 3;
+        uint32 count = 4;
+        string adornment_url = 5;
+    }
+
+    message VoteRank {
+        repeated UserRank user_list = 1;
+        SelfScore self_score = 2;
+    }
+
+    message GetForbidChatNoFeelUserListRes {
+        repeated string user_list = 1;
+    }
+
+    message GetForbidChatTimeRes {
+         uint64 forbid_chat_end_time = 1;
+    }
+
+    message ForbidChatNoFeelNotice {
+        enum ForbidChatOperation {
+            CHAT_ENABLE = 0;
+            CHAT_DISABLE = 1;
+        }
+        string user_id = 1;
+        ForbidChatOperation operate = 2;
+        uint32 room_index = 3;
+    }
+
+    message GetTencentConfigRes {
+        uint32 sdk_appid = 1;
+        uint32 account_type = 2;
+        string user_sig = 3;
+    }
+
+    message GetRemainLotteryCountRes {
+        uint32 count = 1;
+    }
+
+    message LotteryRes {
+        message LotteryUserInfo {
+            string user_id = 1;
+            string nickname = 2;
+            string avatar_url = 3;
+        }
+        repeated LotteryUserInfo lottery_user = 1;
+        uint32 remain_count = 2;
+    }
+    message LotteryBroadcast {
+        repeated string user_list = 1;
+        LotteryType lottery_type = 2;
+        uint32 reward_count = 3;
+        string name = 4; // 奖品名称
+    }
+    enum PusherOperateType {
+        PUSHER_NONE = 0;
+        PUSHER_REMOTE_PUSH = 1;
+        PUSHER_LOCAL_RECORD = 2;
+        PUSHER_ALL = 3;
+    }
+    message RtmpPusherOperation {
+        PusherOperateType pusher_operate = 1;
+    }
+
+    message QuestionnaireQueryRes {
+        uint32 questionnaire_num = 1;
+    }
+
+    message QuestionnaireRes {
+    }
+
+    message QuestionnaireBroadcast {
+        string questionnaire_id = 1;
+        string questionnaire_url = 2;
+        uint32 questionnaire_num = 3;
+        string teacher_id = 4;
+        uint32 questionnaire_type = 5;
+    }
+
+    message QuestionnaireAnswerRes {
+    }
+
+    message AsistantQueryGroupQuestionResultRes {
+        message VoteResult {
+            VoteType type = 1;
+            bool is_right = 2;
+            repeated string option_names = 3;
+            string user_id = 4;
+            string nickname = 5;
+            uint32 rank = 6;
+        }
+        message VoiceResult {
+            uint32 level = 1;
+            string user_id = 2;
+            string nickname = 3;
+            uint32 rank = 4;
+        }
+
+        string question_id = 1;
+        QuestionType question_type = 2;
+        uint32 submitted_num = 3;
+        repeated VoteResult vote_result = 4;
+        repeated VoiceResult voice_result = 5;
+    }
+
+    message PublicClassQueryHandsUpUserListRes {
+        message HandsUpUserInfo {
+            string user_id = 1;
+            string nickname = 2;
+            string avatar_url = 3;
+            uint32 user_type = 4;
+            uint32 on_stage_times = 5;
+            bool is_marked = 6;
+        }
+        repeated HandsUpUserInfo user_list = 1;
+        string stage_id = 2;
+        uint32 total_num = 3;
+    }
+
+    message PublicClassPickHandsUpUserToStageP2p {
+        string stage_id = 1;
+        uint32 channel_teacher_id = 2;
+        string teacher_id = 3;
+    }
+
+    message PublicClassUserStageUpBroadcast {
+        string stage_id = 1;
+        uint32 channel_user_id = 2;
+        User user_info = 3;
+    }
+
+    message OffLineUserInfo {
+        string user_id = 1;
+        string nickname = 2;
+        string avatar_url = 3;
+        uint64 leave_time = 4;
+        uint32 count = 5;
+        uint32 time = 6;
+    }
+
+    message OffLineUserList {
+        repeated  OffLineUserInfo off_line_user= 1; //用户信息
+        uint32  total_num = 2;     //未加入学生总数
+        uint32  total_page = 3;    //总页码数
+        uint32  current_page = 4;  //当前页码数
+    }
+    message GetAvailableSpecialAwardListRes {
+        repeated SpecialAward available_award_list = 1;
+    }
+
+    message SendSpecialAwardRes {
+        string special_award_id = 1;
+    }
+
+    message SendSpecialAwardBroadcast {
+        string special_award_id = 1;
+        SpecialAward award = 2;
+        string teacher_id = 3;
+    }
+
+    message AsistantStage {
+        string asistant_user_id = 1;
+        LayoutType layout_type = 2;
+    }
+
+    message QueryAsistantStageStatusRes {
+        bool is_stage_up = 1;
+        string asistant_user_id = 2;
+        LayoutType layout_type = 3;
+    }
+    message PublicClassStageUserOffLine {
+        string stage_id = 1;
+        string user_id = 2;
+    }
+    message SysPushCommodity {
+        string reward_name = 1;
+        string reward_image = 2;
+    }
+    message MediaDeviceSetRes {
+
+    }
+    message QueryMediaDeviceStatusRes {
+        bool is_mic_disabled = 1;
+        bool is_camera_disabled = 2;
+    }
+
+    message PrivateMsgRes {
+        uint32 chat_id = 1;
+        string to_user_id = 2;
+        uint64 created_at = 3;
+    }
+    message GetPrivateMsgUidsRes {
+        repeated User to_user_list = 1;
+    }
+    message GetPrivateMsgByUidRes {
+        repeated PrivateChat data = 1;
+        uint32 total_num = 2;
+        uint32 my_last_read_chat_id = 3;
+        uint32 other_side_last_read_chat_id = 4;
+    }
+    message ReportLastReadChatIdP2P {
+        string user_id = 1;
+        uint32 chat_id = 2;
+    }
+
+    message TeacherScreenToAssistantRes {
+
+    }
+
+    message GetPptAnimationCurrentStepRes {
+        string ppt_id = 1;
+        uint32 page_num = 2;
+        uint32 current_step = 3;
+    }
+
+    message GetExaminationConfigRes {
+        message ExaminationConfig {
+            string exercise_id = 1;
+            string examination = 2;
+            string exercise_name = 3;
+        }
+        repeated ExaminationConfig examination_before_calss = 1;
+        repeated ExaminationConfig examination_in_calss = 2;
+        repeated ExaminationConfig examination_after_calss = 3;
+    }
+    message StartExaminationRes {
+        string examination_id = 1;
+    }
+    message StartExaminationBroadcast {
+        string examination_id = 1;
+        string examination = 2;
+        string teacher_id = 3;
+        uint64 examination_start_time = 4;
+        ExaminationType examination_type = 5;
+        repeated uint32 question_index_list = 6;
+        repeated uint32 question_type_list = 7;
+        bool belong_continue_right = 8;
+    }
+    message GetExaminationResultOverviewRes {
+        message ExaminationResultOverview {
+            uint32 question_index = 1;
+            uint32 question_type = 2;
+            uint32 completion_count = 3;
+            uint32 correct_count = 4;
+        }
+        string examination_id = 1;
+        repeated ExaminationResultOverview examination_overview_result = 2;
+        uint32 completed_count = 3;
+        uint64 examination_start_time = 4;
+        uint64 examination_stop_time = 5;
+        uint32 online_user_count = 6;
+    }
+    message GetQuestionAnalysisRes {
+        message QuestionAnalysis {
+            string option_name = 1;
+            uint32 answer_count = 2;
+        }
+        string examination_id = 1;
+        uint32 question_index = 2;
+        uint32 question_type = 3;
+        repeated QuestionAnalysis question_analysis = 4;
+    }
+    message GetExaminationStudentRankRes {
+        message ExaminationStudentRank {
+            uint32 index = 1;
+            string nickname = 2;
+            string remark = 3;
+            uint32 score = 4;
+            string user_id = 5;
+            uint64 examination_duration = 6;
+        }
+        string examination_id = 1;
+        repeated ExaminationStudentRank examination_student_rank = 2;
+        uint32 total_num = 3;
+    }
+    message GetStudentExaminationResultRes {
+        string examination_id = 1;
+        string user_id = 2;
+        string examination_answer = 3;
+    }
+    message GetExaminationGroupRankRes {
+        message ExaminationGroupRank {
+            uint32 index = 1;
+            uint32 group_id = 2;
+            string asistant_name = 3;
+            uint32 average_score = 4;
+            uint64 average_duration = 5;
+        }
+        string examination_id = 1;
+        repeated ExaminationGroupRank examination_group_rank = 2;
+        uint32 total_num = 3;
+    }
+    message StopExaminationBroadcast {
+        string examination_id = 1;
+    }
+    message GetCompletedExaminationListRes {
+        message CompletedExamination {
+            string examination_id = 1;
+            string examination = 2;
+            repeated uint32 question_index_list = 3;
+            repeated uint32 question_type_list = 4;
+        }
+        repeated CompletedExamination completed_examination_list = 1;
+        string before_class_examination_id = 2;
+        string after_class_examination_id = 3;
+    }
+    message QueryPraiseStudentListRes {
+        repeated string user_list = 1;
+        uint32 total_num = 2;
+        uint32 total_page = 3;
+        uint32 current_page = 4;
+
+    }
+
+    message StudentReportLeaveLiveRes {
+
+    }
+    message StudentReportBackLiveRes {
+
+    }
+    message CheckExaminationStatusRes {
+        string examination_id = 1;
+    }
+    message GetExaminationByIdRes {
+        message ExaminationAnswers {
+            uint32 question_index = 1;
+            repeated string examination_options = 2;
+            bool is_right = 3;
+            string examination_answer = 4;
+        }
+        string examination_id = 1;
+        string examination = 2;
+        repeated uint32 question_index_list = 3;
+        uint64 examination_start_time = 4;
+        ExaminationType examination_type = 5;
+        repeated uint32 question_type_list = 6;
+        repeated ExaminationAnswers examination_answers = 7;
+        string teacher_id = 8;
+        uint64 examination_duration = 9;
+    }
+    message ReportExaminationResultRes {
+        string examination_id = 1;
+        uint32 question_index = 2;
+        uint32 reward_count = 3;
+        StudyTogetherMsg study_together_msg = 4;
+    }
+    message StudentCompleteExaminationRes {
+        uint64 examination_duration = 1;
+    }
+    message SubjectivePhoneticStartRes {
+        string question_id = 1;
+        uint64 start_time = 2;
+    }
+    message SubjectivePhoneticStartBroadcast {
+        string question_id = 1;
+        string teacher_id = 2;
+        uint64 start_time = 3;
+        bool belong_continue_right = 4;
+    }
+    message SubjectivePhoneticStopRes {
+        string question_id = 1;
+    }
+    message SubjectivePhoneticStopBroadcast {
+        string question_id = 1;
+        string teacher_id = 2;
+        uint64 start_time = 3;
+        uint64 stop_time = 4;
+        uint32 max_delay_report_ms = 5;//最大延迟提交时间，客户端在老师结束开放式语音题后，随机延迟 0-max_delay_ms 毫秒进行提交
+    }
+    message SubjectivePhoneticSubmitRes {
+        string question_id = 1;
+        uint64 record_time = 2; // 录音时长（毫秒）
+    }
+    message StudentQueryOpenMouthInfoRes {
+        string live_id = 1;
+        uint32 open_mouth_num = 2; 
+        uint32 open_mouth_time = 3; 
+    }
+    message TeacherQuerySubjectivePhoneticRes {
+        string question_id = 1;
+        uint64 start_time = 2;
+    }
+
+    message ExperimentationInfo {
+        string experimentation_name = 1;
+        string experimentation_img = 2;
+        string experimentation_addr = 3;
+    }
+    message GetLiveNobookExperimentationListRes {
+       repeated ExperimentationInfo experimentation_list = 1;
+    }
+    message PushLiveNobookExperimentationRes {
+       string experimentation_id = 1;
+    }
+
+    message PushLiveNobookExperimentationBroadCast {
+        string experimentation_id = 1;
+        string experimentation_name = 2;
+        string experimentation_img = 3;
+        string experimentation_addr = 4;
+        uint64 start_time = 5;
+        bool belong_continue_right = 6;
+    }
+
+    message StopLiveNobookExperimentationRes {
+       string experimentation_id = 1;
+    }
+
+    message StopLiveNobookExperimentationBroadCast {
+        string experimentation_id = 1;
+    }
+
+    message CommitLiveNobookExperimentationRes {
+        string experimentation_id = 1;
+        uint64 experimentation_time = 2;
+    }
+
+    message GroupRank {
+        uint32 index = 1;
+        string group_id = 2;
+        string asistant_name = 3;
+        float commit_rate = 4;
+        uint64 average_time = 5;
+    }
+    message QueryNobookExperimentationGroupRankRes {
+        repeated GroupRank group_rank = 1;
+        float commit_rate = 2;      //当前小组的提交率
+        uint32 commit_count = 3;    //当前小组的提交人数
+        int32 uncommit_count = 4;  //当前小组的未提交人数
+        uint32 user_count = 5;      //当前小组人数（老师发题那一刻的在线人数）
+        uint32 total_num = 6;
+        uint32 total_page = 7;
+        uint32 current_page = 8;
+    }
+
+    enum ExperimentationStatus {
+        COMMIT = 0;
+        UNCOMMIT = 1;
+    }
+    message StudentRank {
+        uint32 index = 1;
+        string nickname = 2;
+        string remark = 3;
+        ExperimentationStatus status = 4;
+        uint64 experimentation_time = 5;
+    }
+
+    message QueryNobookExperimentationStudentRankRes {
+        repeated StudentRank student_rank = 1;
+        uint32 total_num = 2;
+        uint32 total_page = 3;
+        uint32 current_page = 4;
+    }
+
+    message CheckNobookExperimentationStatusRes {
+        string experimentation_id = 1;
+        string experimentation_name = 2;
+        string experimentation_img = 3;
+        string experimentation_addr = 4; 
+        uint64 start_time = 5;
+        uint32 experimentation_time = 6;  //默认0表示未提交过实验，大于0则表示学生实验用时时间，老师端忽略该字段
+    }
+
+    message CoursewareConfigRes {
+        message CoursewareConfigInfo {
+            message CoursewarePageInfo {
+                string page_name = 1;
+                uint32 question_count = 2;
+                bool has_question = 3;
+                repeated CoursewareQuestion courseware_questions = 4;
+            }
+            string courseware_id = 1;
+            string base_url = 2; //每个单页 ppt 的地址为 ${base_url}/${page_name}/index.html
+            uint32 page_count = 3;
+            float aspect_ratio = 4;
+            repeated CoursewarePageInfo page_list = 5;
+            uint32 version_number = 6;
+            uint32 pages_with_question = 7; //含有互动题的页码个数
+            string courseware_name = 8;
+            uint32 sequence_number = 9;
+            bool is_current_used = 10;
+        }
+        repeated CoursewareConfigInfo courseware_config = 1;
+    }
+
+    message CoursewareExerciseStartRes {
+        string courseware_exercise_id = 1;
+    }
+    message CoursewareExerciseStartBroadcast {
+        string courseware_exercise_id = 1;
+        string courseware_id = 2;
+        string courseware_url = 3;
+        uint32 questions_count = 4;
+        uint32 page_num = 5;
+        repeated CoursewareQuestion courseware_questions = 6;
+        uint32 countdown_seconds = 7;
+        uint64 courseware_exercise_start_time = 8;
+        bool belong_continue_right = 9;
+    }
+    message CoursewareQuestionReportRes {
+        uint32 reward_count = 1;
+        string courseware_exercise_id = 2;
+        uint32 question_index = 3;
+        StudyTogetherMsg study_together_msg = 4;
+        uint32 pet_reward_count = 5;
+    }
+    message CoursewareExercieStopRes {
+    }
+    message CoursewareExerciseStopBroadcast {
+        string courseware_exercise_id = 1;
+    }
+    message GetCoursewareExerciseAnalysisRes {
+        string courseware_exercise_id = 1;
+        uint32 question_index = 2;
+        uint32 completion_count = 3;
+        uint32 correct_count = 4;
+        uint32 online_user_count = 5;
+        CoursewareQuestion courseware_question_item = 6;
+        CoursewareAnalysis courseware_analysis = 7;
+        uint32 partial_right_count = 8;
+    }
+    message GetCoursewareExerciseStatusRes {
+        message CoursewareExerciseInfo {
+            string courseware_exercise_id = 1;
+            string courseware_id = 2;
+            uint32 page_num = 3;
+            uint32 countdown_seconds = 4;
+            uint64 courseware_exercise_start_time = 5;
+            uint32 questions_count = 6;
+        }
+        string unfinished_courseware_exercise_id = 1;
+        repeated CoursewareExerciseInfo courseware_exercise_list = 2;
+    }
+
+    oneof msg_resp {
+        JoinRoom join_room = 1;
+        ReJoin re_join = 2;
+        GetLiveInfo get_live_info = 5;
+        GetPptInfo get_ppt_info = 6;
+        GetPencilList get_pencil_list = 7;
+        GetUserList get_user_list = 8;
+        ChatRes chat_res = 9;
+        ForbidChat forbid_chat = 10;
+        ChangeLiveStatus live_status_change = 11;
+        ChangePptPage change_ppt_page_res = 13;
+        PencilRes pencil_res = 15;
+        StreamStatusChange stream_status_change = 16;
+        Contest contest_open_res = 17;
+        ContestSubmitRes contest_submit_res = 18;
+        ContestQueryRes contest_query_res = 20;
+        CountDown count_down_start_res = 21;
+        CountDown count_down_end_res = 22;
+        VoteStartRes vote_start_res = 23;
+        VoteSubmitRes vote_submit_res = 24;
+        VoteStopRes vote_stop_res = 25;
+        VoteQueryRes vote_query_res = 26;
+        GetForbidListRes get_forbid_list_res = 27;
+        GetStageUserListRes get_stage_user_list_res = 31;
+        RewardQueryRes reward_query_res = 35;
+        PrivilegeRes grant_privilege_res = 37;
+        PrivilegeRes revoke_privilege_res = 38;
+        ChatRecord get_chat_record_res = 40;
+        GetPrivilegeUserRes get_privilege_user_res = 41;
+        RewardQueryAllRes reward_query_all_res = 42;
+        Chat chat_broadcast = 100;
+        UserListChangeBroadcast user_list_change = 110;
+        ChatControl chat_control_broadcast = 120;
+        ChangePptPage change_ppt_page_broadcast = 130;
+        Pencil pencil_broadcast = 150;
+        ContestSubmitBroadcast contest_submit_broadcast = 180;
+        ContestCloseBroadcast contest_close_broadcast = 190;
+        CountDown count_down_start_broadcast = 210;
+        CountDown count_down_end_broadcast = 220;
+        VoteStartBroadcast vote_start_broadcast = 230;
+        // VoteSubmitBroadcast submit_vote_broadcast = 240;
+        VoteStopBroadcast vote_stop_broadcast = 250;
+
+        StageP2P stage_up_p2p = 281;
+        StageNotificationRes stage_notification_broadcast = 290;
+        StageP2P stage_down_p2p = 301;
+        WindowMove window_move_broadcast = 310;
+        RewardIndividual reward_individual_broadcast = 330;
+        RewardIndividual reward_individual_p2p = 331;
+        RewardEveryone reward_everyone_broadcast = 340;
+        Privilege grant_privilege_broadcast = 370;
+        PrivilegeP2P grant_privilege_p2p = 371;
+        Privilege revoke_privilege_broadcast = 380;
+        PrivilegeP2P revoke_privilege_p2p = 381;
+        RefuseStageUpP2P refuse_stage_up_p2p = 431;
+        AddVideoListBroadcast add_video_list_broadcast = 440;
+        AddVideoListRes add_video_list_res = 441;
+        StageUpBroadcast stage_up_broadcast = 442;
+        GetForbidListWithInfoRes get_forbid_list_with_info_res = 450;
+        ChangeVideoList change_video_list_broadcast = 451;
+        StageSimple stage_up_simple_broadcast = 470;
+        StageSimple stage_down_simple_broadcast = 480;
+        StageSimple stage_move_simple_broadcast = 490;
+        RewardRankShow reward_rank_show_broadcast = 510;
+        HandsUpBroadcast hands_up_broadcast = 520;
+        ForbidMic forbid_mic_res = 530;
+        ForbidMic forbid_mic_broadcast = 531;
+        RewardRankRefresh reward_rank_refresh_broadcast = 532;
+        ForbidMicAll forbid_mic_all_res = 540;
+        ForbidMicAll forbid_mic_all_broadcast = 541;
+        VoteQuery1v6Res vote_query_1v6_res = 550;
+        HandsUp hands_up_res = 551;
+        AddBoardPencilRes add_board_pencil_res = 560;
+        BoardPencil add_board_pencil_broadcast = 561;
+        ChangeBoard change_board_res = 570;
+        ChangeBoard change_board_broadcast = 571;
+        GetBoardPencilRes get_board_pencil_list_res = 580;
+        ChangeMediaStatus change_media_status_res = 590; //@deprected
+        ChangeMediaStatus change_media_status_broadcast = 591; //@deprected
+        QueryMediaInfoRes query_media_info_res = 600;
+        GetTeacherOnlineList get_teacher_online_list_res = 610;
+        MediaLocation media_location_change_res = 620;
+        MediaLocation media_location_change_broadcast = 621;
+        LiveConfig get_live_config_res = 630;
+        MediaStatusAndLocation get_media_status_location_res = 640;
+        MediaStatus set_media_status_res = 650;
+        MediaStatus set_media_status_broadcast = 651;
+        Notice notice_publish_broadcast = 661;
+        NoticeDelete notice_delete_broadcast = 671;
+        Notice notice_query_res = 680;
+        Come2ClassReward come2class_reward_p2p = 682;
+        AvailableRewardCountRes available_reward_count_res = 701;
+        VoiceRead voice_read_start_res = 710;
+        VoiceRead voice_read_start_broadcast = 711;
+        VoiceReadReport voice_read_report_res = 720;
+        VoiceReadLevelAnalysis voice_read_query_res = 730;
+        VoiceReadStop voice_read_stop_res = 740;
+        VoiceReadStop voice_read_stop_broadcast = 741;
+        VoteStartNewBroadcast vote_start_new_broadcast = 750;
+        GroupCompeteQueryRes group_compete_query_res = 760;
+        VoteStartBroadcast vote_no_finish_p2p = 770;
+        VoiceRead voice_no_finish_p2p = 771;
+        ReadSentenceStartBroadcast sentence_no_finish_p2p = 772;
+
+        JoinRtcRoomRes join_rtc_room_res = 780;
+        JoinRtcRoomBroadcast join_rtc_room_broadcast = 781;
+        ChangeRtcRoomWindowList change_rtc_room_window_list_broadcast = 790;
+        RtcRoomWindowLocation rtc_room_window_stand_out_broadcast = 800;
+        RtcRoomWindowRecover rtc_room_window_recover_broadcast = 810;
+        RtcRoomWindowLocation stand_out_window_move_broadcast = 820;
+        //        GetStandOutUserListRes get_stand_out_user_list_res = 830;
+        ForbidRtcMic forbid_rtc_mic_res = 840;
+        ForbidRtcMic forbid_rtc_mic_broadcast = 841;
+        RtcHandsUp rtc_hands_up_res = 850;
+        RtcHandsUpBroadcast rtc_hands_up_broadcast = 851;
+        ForbidRtcVideo forbid_rct_video_res = 860;
+        ForbidRtcVideo forbid_rct_video_broadcast = 861;
+        ReadSentenceStartRes read_sentence_start_res = 870;
+        ReadSentenceStartBroadcast read_sentence_start_broadcast = 871;
+        ReadSentenceQueryRes read_sentence_query_res = 890;
+        ReadSentenceStop read_sentence_stop_broadcast = 900;
+        VoteRank vote_rank_group_res = 911;
+        Chat forbid_chat_no_feel_p2p = 930;
+        Chat forbid_chat_no_feel_broadcast = 931;
+        ForbidChatNoFeelNotice forbid_chat_no_feel_notice_broadcast = 932;
+        GetForbidChatNoFeelUserListRes get_forbid_chat_no_feel_user_list_res = 940;
+        GetForbidChatTimeRes get_forbid_chat_time_res = 950;
+        GetTencentConfigRes get_tenctent_config_res = 960;
+        GetRemainLotteryCountRes get_remain_lottery_count_res = 970;
+        LotteryRes lottery_res = 980;
+        RtmpPusherOperation rtmp_pusher_operation_broadcast = 991;
+        QuestionnaireQueryRes questionnaire_query_res = 1001;
+        QuestionnaireRes questionnaire_res = 1011;
+        QuestionnaireBroadcast questionnaire_broadcast = 1012;
+        QuestionnaireAnswerRes questionnaire_answer_res = 1021;
+        AsistantQueryGroupQuestionResultRes asistant_query_group_question_result_res = 1030;
+        PublicClassStartStageUp public_class_start_stage_up_res = 1040;
+        PublicClassStartStageUp public_class_start_stage_up_broadcast = 1041;
+        PublicClassQueryHandsUpUserListRes public_class_query_hands_up_user_list_res = 1061;
+        PublicClassPickHandsUpUserToStageP2p public_class_pick_hands_up_user_to_stage_p2p = 1072;
+        PublicClassUserStageUpBroadcast public_class_user_stage_up_broadcast = 1082;
+        PublicClassStageUserOffLine public_class_stage_user_off_line_p2p = 1083;
+        PublicClassLetUserStageDown public_class_let_user_stage_down_broadcast = 1092;
+        PublicClassStopStageUp public_class_stop_stage_up_broadcast = 1101;
+        GetAvailableSpecialAwardListRes get_available_special_award_list_res = 1110;
+        SendSpecialAwardRes send_special_award_res = 1120;
+        SendSpecialAwardBroadcast send_special_award_broadcast = 1121;
+        OffLineUserList off_line_user_list_res = 1141;
+        ReadyToStartClass ready_to_start_class_res = 1150;
+        ReadyToStartClass ready_to_start_class_broadcast = 1151;
+        AsistantStage asistant_stage_up_broadcast = 1161;
+        AsistantStage asistant_stage_down_broadcast = 1171;
+        QueryAsistantStageStatusRes query_asistant_stage_status_res = 1180;
+        LotteryBroadcast lottery_broadcast = 1192;
+        SysPushCommodity sys_push_commodity_p2p = 1202;
+        MediaDeviceSetRes media_device_set_res = 1211;
+        QueryMediaDeviceStatusRes query_media_device_status_res = 1221;
+        PrivateMsgRes private_msg_res = 1230;
+        PrivateChat private_msg_p2p = 1232;
+        GetPrivateMsgUidsRes get_private_msg_uids_res = 1240;
+        GetPrivateMsgByUidRes get_private_msg_by_uid_res = 1250;
+        ReportLastReadChatIdP2P reoport_last_read_chat_id_p2p = 1262;
+        PptPencilUndoRes ppt_pencil_undo_res = 1271;
+        PptPencilUndoOrRedoBroadcast ppt_pencil_undo_broadcast = 1272;
+        PptPencilRedoRes ppt_pencil_redo_res = 1281;
+        PptPencilUndoOrRedoBroadcast ppt_pencil_redo_broadcast = 1282;
+        BoardPencilUndoRes board_pencil_undo_res = 1291;
+        BoardPencilUndoOrRedoBroadcast board_pencil_undo_broadcast = 1292;
+        BoardPencilRedoRes board_pencil_redo_res = 1301;
+        BoardPencilUndoOrRedoBroadcast board_pencil_redo_broadcast = 1302;
+        TeacherScreenToAssistantRes  teacher_screen_to_assistant_res = 1311;
+        GetPptAnimationCurrentStepRes get_ppt_animation_current_step_res = 1321;
+        GetExaminationConfigRes get_examination_config_res = 1330;
+        StartExaminationRes start_examination_res = 1340;
+        StartExaminationBroadcast start_examination_broadcast = 1341;
+        GetExaminationResultOverviewRes get_examination_result_overview_res = 1350;
+        GetQuestionAnalysisRes get_question_analysis_res = 1360;
+        GetExaminationStudentRankRes get_examination_student_rank_res = 1370;
+        GetStudentExaminationResultRes get_student_examination_result_res = 1380;
+        GetExaminationGroupRankRes get_examination_group_rank_res = 1390;
+        StopExaminationBroadcast stop_examination_broadcast = 1401;
+        GetCompletedExaminationListRes get_complete_examination_list_res = 1410;
+        QueryPraiseStudentListRes query_praise_student_list_res = 1440;
+        StudentReportLeaveLiveRes student_report_leave_live_res = 1450;
+        StudentReportBackLiveRes student_report_back_live_res = 1460;
+        CheckExaminationStatusRes check_examination_status_res = 1470;
+        GetExaminationByIdRes get_examination_by_id_res = 1480;
+        ReportExaminationResultRes report_examination_result_res = 1481;
+        StudentCompleteExaminationRes student_complete_examination_res = 1482;
+
+        GetLiveNobookExperimentationListRes get_live_nobook_experimentation_list_res = 1490;
+        PushLiveNobookExperimentationRes push_live_nobook_experimentation_res = 1500;
+        PushLiveNobookExperimentationBroadCast push_live_nobook_experimentation_broadcast = 1501;
+
+        StopLiveNobookExperimentationRes stop_live_nobook_experimentation_res = 1510;
+        StopLiveNobookExperimentationBroadCast stop_live_nobook_experimentation_broadcast = 1511;
+        CommitLiveNobookExperimentationRes commit_live_nobook_experimentation_res = 1520;
+        QueryNobookExperimentationGroupRankRes query_nobook_experimentation_group_rank_res = 1530;
+        QueryNobookExperimentationStudentRankRes query_nobook_experimentation_student_rank_res = 1540;
+        CheckNobookExperimentationStatusRes check_nobook_experimentation_status_res = 1550;
+
+        SubjectivePhoneticStartRes subjective_phonetic_start_res = 1570;
+        SubjectivePhoneticStartBroadcast subjective_phonetic_start_broadcast = 1571;
+        SubjectivePhoneticStopRes subjective_phonetic_stop_res = 1580;
+        SubjectivePhoneticStopBroadcast subjective_phonetic_stop_broadcast = 1581;
+        SubjectivePhoneticSubmitRes subjective_phonetic_submit_res = 1590;
+        StudentQueryOpenMouthInfoRes student_query_open_mouth_info_res = 1600;
+        TeacherQuerySubjectivePhoneticRes teacher_query_subjective_phonetic_res = 1610;
+        SubjectivePhoneticStartBroadcast subjective_phonetic_no_finish_p2p = 1620;
+
+        CoursewareConfigRes courseware_config_res = 1630;
+        CoursewareExerciseStartRes courseware_exercise_start_res = 1640;
+        CoursewareExerciseStartBroadcast courseware_exercise_start_broadcast = 1641;
+        CoursewareQuestionReportRes courseware_question_report_res = 1650;
+        CoursewareExercieStopRes courseware_exercise_stop_res = 1660;
+        CoursewareExerciseStopBroadcast courseware_exercise_stop_broadcast = 1661;
+        GetCoursewareExerciseAnalysisRes get_courseware_exercise_analysis_res = 1670;
+        GetCoursewareExerciseStatusRes get_courseware_exercise_status_res = 1680;
+        CheckCoursewareExerciseStatusRes check_courseware_exercise_status_res = 1690;
+        GetCoursewareExerciseStudentRankRes get_courseware_exercise_student_rank_res = 1700;
+        GetCoursewareExerciseGroupRankRes get_courseware_exercise_group_rank_res = 1710;
+        GetGroupCompetitionConfigRes get_group_competition_config_res = 1720;
+        GroupCompetitionStartRes group_competition_start_res = 1730;
+        GroupCompetitionStartBroadcast group_competition_start_broadcast = 1731;
+        GetGroupCompetitionVictoryStatusRes get_group_competition_victory_status_res = 1740;
+        GetGroupCompetitionRightRateRankRes get_group_competition_right_rate_rank_res = 1750;
+        GroupCompetitionShowVictoryStatusRes group_competition_show_victory_status_res = 1760;
+        GroupCompetitionShowVictoryStatusBroadcast group_competition_show_victory_status_broadcast = 1761;
+        GroupCompetitionPraiseStudentRes group_competition_praise_student_res = 1770;
+        GroupCompetitionPraiseStudentBroadcast group_competition_praise_student_broadcast = 1771;
+        GroupCompetitionEncourageStudentRes group_competition_encourage_student_res = 1780;
+        GroupCompetitionEncourageStudentBroadcast group_competition_encourage_student_broadcast = 1781;
+        GroupCompetitionRewardStudentRes group_competition_reward_student_res = 1790;
+        GroupCompetitionRewardStudentBroadcast group_competition_reward_student_broadcast = 1791;
+        GroupCompetitionStopRes group_competition_stop_res = 1800;
+        GroupCompetitionStopBroadcast group_competition_stop_broadcast = 1801;
+        GroupCompetitionShowTotalRankBroadcast group_competition_show_total_rank_broadcast = 1811;
+        QueryPraiseStudentListByAssistRes query_praise_student_list_by_assist_res = 1821;
+        GetGroupCompetitionStudentConfigRes get_group_competition_student_config_res = 1830;
+        GetVoiceGroupRankRes get_voice_group_rank_res = 1840;
+        GetReadGroupRankRes get_read_group_rank_res = 1850;
+        GetOnlineGroupListRes get_online_group_list_res = 1860;
+        EncouragePraiseGroup encourage_praise_group_res = 1870;
+        EncouragePraiseGroup encourage_praise_group_broadcast = 1871;
+        JoinRoomBroadcast join_room_broadcast = 1880;
+        VoteGroupRankRes vote_group_rank_query_res = 1890;
+        CreateTagRes create_tag_res = 1900;
+        ContinueRightP2P continue_right_p2p = 1910;
+        MVPBroadcast mvp_broadcast = 1920;
+        UserAndGroupInfo user_data_group_info_p2p = 1930;
+        PetStates pet_states_p2p = 1940;
+
+        ClosePraiseStudentListRes close_praise_student_list_res = 1950;
+        ClosePraiseStudentListBroadcast close_praise_student_list_broadcast = 1951;
+        PraiseStudentListBroadcast praise_student_list_broadcast = 1952;
+        
+        QueryEnrollStudentListRes query_enroll_student_list_res = 2001;
+
+        LiveMiddleAd get_live_middle_ad_res = 2011;
+
+        LiveMiddleAdShowRes live_middle_ad_show_res = 2021;
+        LiveMiddleAd live_middle_ad_show_broadcast = 2022;
+
+        LiveMiddleAdShowEndRes live_middle_ad_show_end_res = 2031;
+        LiveMiddleAdShowEndBroadcast live_middle_ad_show_end_broadcast = 2032;
+
+        GetLiveMiddleAdListRes get_live_middle_ad_list_res = 2041;
+        
+        LiveMiddleAdShowRes show_live_middle_ad_item_res = 2051;
+
+        GetMixedCoursewareConfigRes get_mixed_courseware_config_res = 2061;
+
+        SuperSmallClassRtcChannelInfoRes super_small_class_rtc_channel_info_res = 2070;
+
+        QuerySmallClassTeamInfoRes query_small_class_team_info_res = 2080;
+        
+        GiveTheThumbsUpToClassmateRes give_the_thumbs_up_to_classmate_res = 2090;
+        GiveTheThumbsUpToClassmateP2P give_the_thumbs_up_to_classmate_p2p = 2091;
+
+        GiveTheThumbsUpNumberP2P give_the_thumbs_up_number_p2p = 2100;
+
+        GenRushRewardRes gen_rush_reward_res = 2110;
+        GenRushRewardBroadcast gen_rush_reward_broadcast = 2111;
+
+
+        DoRushRewardRes do_rush_reward_res = 2120;
+        DoRushRewardBroadcast do_rush_reward_broadcast = 2121;
+
+        GetRewardRankListRes get_reward_rank_list_res = 2130;
+        
+        GetStudentRankListRes get_student_rank_list_res = 2140;
+
+        GetSmallClassAliVoiceTokenRes get_small_class_ali_voice_token_res = 2151;
+
+        ChangeSmallClassStudentVideoStatusRes change_small_class_student_video_status_res = 2161;
+        ChangeSmallClassStudentVideoStatusBroadcast change_small_class_student_video_status_broadcast = 2162;  
+
+        QuerySmallClassTeamListRes query_small_class_team_list_res = 2171;  
+
+        StopRushRewardRes stop_rush_reward_res = 2181;
+        StopRushRewardBroadCast stop_rush_reward_broadcast = 2182;
+
+        RingTheBellRes ring_the_bell_res = 2191;
+        RingTheBellBroadCast ring_the_bell_broadcast = 2192;
+
+        QueryOfflineDoubleTeacherRtcRes query_offline_double_teacher_rtc_res = 2200;
+
+        RushRewardCountRes rush_reward_count_res = 2210;
+
+        RushRewardNoFinishP2p rush_reward_no_finish_p2p = 2220;
+
+        NotifyStudentRewardCountP2p notify_student_reward_count_p2p = 2230;
+
+        NotifyStudentVideoViolationRes notify_student_video_violation_res = 2240;
+        NotifyStudentVideoViolationP2p notify_student_video_violation_p2p = 2241;
+    }  
+}
